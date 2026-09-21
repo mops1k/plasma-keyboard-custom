@@ -8,6 +8,7 @@
 #include "inputpanelrole.h"
 #include "qwaylandinputpanelsurface_p.h"
 
+#include <QScreen>
 #include <QtWaylandClient/private/qwaylandscreen_p.h>
 #include <QtWaylandClient/private/qwaylandwindow_p.h>
 
@@ -44,6 +45,18 @@ void QWaylandInputPanelSurface::applyConfigure()
         if (!screen) {
             qCWarning(qLcQpaShellIntegration) << "No Wayland screen available, cannot configure input panel surface";
             return;
+        }
+
+        // set_toplevel only tells the compositor which wl_output to anchor this
+        // surface to; it does not update QWindow::screen(). Left alone, that
+        // stays whatever Qt assigned when the window was created (typically the
+        // primary screen), so QML's Screen attached property -- and every panel
+        // dimension the style derives from it -- describes the wrong screen on
+        // a multi-monitor setup whenever the panel is not shown on the primary
+        // one. Assign the actual screen before anchoring so Screen.width/height
+        // match where the panel is really going to appear.
+        if (QScreen *qScreen = screen->screen()) {
+            window()->window()->setScreen(qScreen);
         }
 
         set_toplevel(screen->output(), position_center_bottom);
