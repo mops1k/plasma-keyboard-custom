@@ -363,6 +363,25 @@ Server = https://mops1k.github.io/plasma-keyboard-custom/repo/$arch</code></pre>
           <button class="copy" type="button" data-copy aria-label="Copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
         </div>
       </article>
+      <article class="install-card">
+        <h3 data-i18n="inst.fedora.t">Fedora, Bazzite и другие дистрибутивы</h3>
+        <p data-i18n="inst.fedora.d">В релизе есть RPM для систем на базе Fedora (Fedora KDE, Bazzite, Nobara) и Flatpak-бандл, который несёт собственный стек Qt и KDE. RPM собирается под ветку Qt: fc43 для Fedora 43, fc44 для Fedora 44/45, потому что клавиатура использует приватные API Qt. На atomic-системах пакет ставится через rpm-ostree с последующей перезагрузкой.</p>
+        <div class="code-row">
+          <pre class="code"><code>sudo dnf install ./plasma-keyboard-custom-&lt;version&gt;-1.fc43.x86_64.rpm
+sudo rpm-ostree install ./plasma-keyboard-custom-&lt;version&gt;-1.fc43.x86_64.rpm</code></pre>
+          <button class="copy" type="button" data-copy aria-label="Copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
+        </div>
+      </article>
+      <article class="install-card">
+        <h3 data-i18n="inst.flatpak.t">Flatpak — для любого дистрибутива</h3>
+        <p data-i18n="inst.flatpak.d">Ставится в песочницу пользователя, поэтому KCM не попадает в системные настройки, а KWin нужно указать на desktop-файл Flatpak (настройки самой клавиатуры остаются доступны из клавиатуры):</p>
+        <div class="code-row">
+          <pre class="code"><code>flatpak install --user ./plasma-keyboard-custom-&lt;version&gt;.flatpak
+kwriteconfig6 --notify --file kwinrc --group Wayland --key InputMethod \
+  "$HOME/.local/share/flatpak/exports/share/applications/org.kde.plasma.keyboard.custom.desktop"</code></pre>
+          <button class="copy" type="button" data-copy aria-label="Copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
+        </div>
+      </article>
     </div>
     <p class="note" data-i18n="inst.after">После установки выберите <strong>plasma-keyboard-custom</strong> в Параметры системы → Виртуальная клавиатура. Обновления ставятся той же командой: версия и <code>pkgrel</code> растут с каждым релизом, а клавиатура перезапускается сама.</p>
   </section>
