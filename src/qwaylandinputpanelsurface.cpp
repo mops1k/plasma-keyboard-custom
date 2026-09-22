@@ -47,14 +47,6 @@ void QWaylandInputPanelSurface::applyConfigure()
             return;
         }
 
-        // set_toplevel only tells the compositor which wl_output to anchor this
-        // surface to; it does not update QWindow::screen(). Left alone, that
-        // stays whatever Qt assigned when the window was created (typically the
-        // primary screen), so QML's Screen attached property -- and every panel
-        // dimension the style derives from it -- describes the wrong screen on
-        // a multi-monitor setup whenever the panel is not shown on the primary
-        // one. Assign the actual screen before anchoring so Screen.width/height
-        // match where the panel is really going to appear.
         if (QScreen *qScreen = screen->screen()) {
             window()->window()->setScreen(qScreen);
         }
