@@ -355,6 +355,23 @@ void PlasmaKeyboardKcm::setHidePanelWhenKeyboardVisible(bool hide)
     setNeedsSave(true);
 }
 
+bool PlasmaKeyboardKcm::hideOnInputFocusLoss() const
+{
+    return m_hideOnInputFocusLoss;
+}
+
+void PlasmaKeyboardKcm::setHideOnInputFocusLoss(bool hide)
+{
+    if (hide == m_hideOnInputFocusLoss) {
+        return;
+    }
+
+    m_hideOnInputFocusLoss = hide;
+    Q_EMIT hideOnInputFocusLossChanged();
+
+    setNeedsSave(true);
+}
+
 QString PlasmaKeyboardKcm::keyboardFontFamily() const
 {
     return m_keyboardFontFamily;
@@ -663,6 +680,7 @@ void PlasmaKeyboardKcm::load()
     setClipboardEnabled(PlasmaKeyboardSettings::self()->clipboardEnabled());
     setShowOnLongTapThresholdMs(PlasmaKeyboardSettings::self()->showOnLongTapThresholdMs());
     setHidePanelWhenKeyboardVisible(PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible());
+    setHideOnInputFocusLoss(PlasmaKeyboardSettings::self()->hideOnInputFocusLoss());
     setKeyboardFontFamily(PlasmaKeyboardSettings::self()->keyboardFontFamily());
     setTheme(PlasmaKeyboardSettings::self()->theme());
     setKeyboardHeightPercent(PlasmaKeyboardSettings::self()->keyboardHeightPercent());
@@ -704,6 +722,7 @@ void PlasmaKeyboardKcm::save()
     PlasmaKeyboardSettings::self()->setClipboardEnabled(m_clipboardEnabled);
     PlasmaKeyboardSettings::self()->setShowOnLongTapThresholdMs(m_showOnLongTapThresholdMs);
     PlasmaKeyboardSettings::self()->setHidePanelWhenKeyboardVisible(m_hidePanelWhenKeyboardVisible);
+    PlasmaKeyboardSettings::self()->setHideOnInputFocusLoss(m_hideOnInputFocusLoss);
     PlasmaKeyboardSettings::self()->setKeyboardFontFamily(m_keyboardFontFamily);
     PlasmaKeyboardSettings::self()->setTheme(m_theme);
     PlasmaKeyboardSettings::self()->setKeyboardHeightPercent(m_keyboardHeightPercent);

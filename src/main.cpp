@@ -416,7 +416,9 @@ public Q_SLOTS:
     void showKeyboard()
     {
         qCDebug(PlasmaKeyboard) << "Show-virtual-keyboard shortcut triggered";
-        if (kwinVisible()) {
+        // Also when only this side has it shown: with hideOnInputFocusLoss off
+        // the keyboard can stay up after KWin already considers it hidden.
+        if (kwinVisible() || QGuiApplication::inputMethod()->isVisible()) {
             // Toggle: hide the keyboard if it is currently shown.
             QGuiApplication::inputMethod()->hide();
             return;
@@ -455,9 +457,14 @@ public Q_SLOTS:
         // poll while the panel is visible would undo a hide: right after the
         // user closed the keyboard the compositor is still visible for a
         // moment, and the next poll would bring the panel straight back.
+        // KWin hides the panel as soon as the text input goes away; with
+        // hideOnInputFocusLoss off the keyboard stays until its hide key is
+        // used, so only a show is followed then.
         if (keyboardVisible != m_lastKeyboardVisible) {
             m_lastKeyboardVisible = keyboardVisible;
-            QGuiApplication::inputMethod()->setVisible(keyboardVisible);
+            if (keyboardVisible || PlasmaKeyboardSettings::self()->hideOnInputFocusLoss()) {
+                QGuiApplication::inputMethod()->setVisible(keyboardVisible);
+            }
         }
 
         // The floating keyboard does not reach the bottom of the screen, so the

@@ -20,6 +20,7 @@
 
 class ClipboardHistory;
 class OverlayController;
+class QTimer;
 
 /**
  * Global state for the on-screen Ctrl/Alt keys.
@@ -217,4 +218,8 @@ private:
     //! until the next input activation. A focused text field keeps sending
     //! updates, and those must not bring the panel back on their own.
     bool m_hiddenByUser = false;
+
+    //! Delays hiding the keyboard after the input context goes away, so a
+    //! momentary loss of focus does not hide it.
+    QTimer *m_hideDelay = nullptr;
 };

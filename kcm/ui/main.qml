@@ -122,6 +122,19 @@ KCM.AbstractKCM {
                     }
                 }
             }
+
+            SettingsRow {
+                label: i18n("Hide when the text field loses focus")
+                description: i18n("When off, the keyboard is only hidden with its hide key")
+
+                QQC2.Switch {
+                    checked: kcm.hideOnInputFocusLoss
+                    onCheckedChanged: {
+                        kcm.hideOnInputFocusLoss = checked;
+                        checked = Qt.binding(() => kcm.hideOnInputFocusLoss);
+                    }
+                }
+            }
         }
 
         SettingsFormPage {

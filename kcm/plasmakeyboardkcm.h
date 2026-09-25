@@ -40,6 +40,7 @@ class PlasmaKeyboardKcm : public KQuickManagedConfigModule
     Q_PROPERTY(int showOnLongTapThresholdMs READ showOnLongTapThresholdMs WRITE setShowOnLongTapThresholdMs NOTIFY showOnLongTapThresholdMsChanged)
     Q_PROPERTY(
         bool hidePanelWhenKeyboardVisible READ hidePanelWhenKeyboardVisible WRITE setHidePanelWhenKeyboardVisible NOTIFY hidePanelWhenKeyboardVisibleChanged)
+    Q_PROPERTY(bool hideOnInputFocusLoss READ hideOnInputFocusLoss WRITE setHideOnInputFocusLoss NOTIFY hideOnInputFocusLossChanged)
     Q_PROPERTY(QString keyboardFontFamily READ keyboardFontFamily WRITE setKeyboardFontFamily NOTIFY keyboardFontFamilyChanged)
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
     Q_PROPERTY(QVariantList availableThemes READ availableThemes NOTIFY availableThemesChanged)
@@ -124,6 +125,9 @@ public:
 
     bool hidePanelWhenKeyboardVisible() const;
     void setHidePanelWhenKeyboardVisible(bool hide);
+
+    bool hideOnInputFocusLoss() const;
+    void setHideOnInputFocusLoss(bool hide);
 
     QString keyboardFontFamily() const;
     void setKeyboardFontFamily(const QString &family);
@@ -246,6 +250,7 @@ Q_SIGNALS:
     void clipboardEnabledChanged();
     void showOnLongTapThresholdMsChanged();
     void hidePanelWhenKeyboardVisibleChanged();
+    void hideOnInputFocusLossChanged();
     void keyboardFontFamilyChanged();
     void themeChanged();
     void availableThemesChanged();
@@ -285,6 +290,7 @@ private:
     bool m_clipboardEnabled = false;
     int m_showOnLongTapThresholdMs = 600;
     bool m_hidePanelWhenKeyboardVisible = true;
+    bool m_hideOnInputFocusLoss = true;
     QString m_keyboardFontFamily;
     QString m_theme = QStringLiteral("system");
     int m_keyboardHeightPercent = 42;

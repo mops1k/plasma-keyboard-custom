@@ -95,6 +95,10 @@
             <label>Whether the recent clipboard entries are shown above the keyboard.</label>
             <default>false</default>
         </entry>
+        <entry key="hideOnInputFocusLoss" type="Bool">
+            <label>Whether the keyboard is hidden when the text field loses the focus. When off, it is only hidden with its hide key.</label>
+            <default>true</default>
+        </entry>
         <entry key="hidePanelWhenKeyboardVisible" type="Bool">
             <label>Whether the Plasma panel is hidden while the keyboard is visible, so the keyboard reaches the bottom of the screen.</label>
             <default>true</default>

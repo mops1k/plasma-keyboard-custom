@@ -21,6 +21,7 @@
 
 #include <QLoggingCategory>
 #include <QTextFormat>
+#include <QTimer>
 
 #include <atomic>
 #include <set>
@@ -179,6 +180,18 @@ InputListenerItem::InputListenerItem()
     m_overlayController->registerTrigger(new PrefixQueryTrigger(m_overlayController));
     m_overlayController->registerTrigger(new TextExpansionTrigger(m_overlayController));
 
+    // Applications drop and re-take the text input for a moment on all kinds of
+    // things (a click elsewhere in the window, a popup, a cursor move), so the
+    // keyboard is only hidden once the input stayed gone for a while; see the
+    // contextChanged handler below, which cancels a pending hide.
+    m_hideDelay = new QTimer(this);
+    m_hideDelay->setSingleShot(true);
+    m_hideDelay->setInterval(300);
+    connect(m_hideDelay, &QTimer::timeout, this, [] {
+        QGuiApplication::inputMethod()->setVisible(false);
+        QGuiApplication::inputMethod()->reset();
+    });
+
     connect(&m_input, &InputPlugin::contextChanged, this, [this] {
         const bool hasContext = m_input.hasContext();
 
@@ -187,6 +200,17 @@ InputListenerItem::InputListenerItem()
         // Cancel any pending overlay state when the input context changes (focus loss or target swap)
         if (m_overlayController) {
             m_overlayController->cancelOverlay();
+        }
+
+        if (hasContext && m_hideDelay->isActive()) {
+            m_hideDelay->stop();
+            if (window()->isVisible()) {
+                // The input came back before the pending hide: the keyboard
+                // stays as it was, without waiting for a long press again.
+                m_hiddenByUser = false;
+                QGuiApplication::inputMethod()->update(Qt::ImQueryAll);
+                return;
+            }
         }
 
         if (hasContext) {
@@ -212,8 +236,8 @@ InputListenerItem::InputListenerItem()
             if (!armed) {
                 showInputPanel(window());
             }
-        } else {
-            QGuiApplication::inputMethod()->setVisible(false);
+        } else if (PlasmaKeyboardSettings::self()->hideOnInputFocusLoss()) {
+            m_hideDelay->start();
         }
     });
     connect(&m_input, &InputPlugin::surroundingTextChanged, this, [this] {
@@ -256,8 +280,9 @@ InputListenerItem::InputListenerItem()
         // again, even if the user had hidden it.
         m_hiddenByUser = false;
         updatePredictionWords();
-        QGuiApplication::inputMethod()->setVisible(false);
-        QGuiApplication::inputMethod()->reset();
+        if (PlasmaKeyboardSettings::self()->hideOnInputFocusLoss()) {
+            m_hideDelay->start();
+        }
     });
 
     connect(&m_touchHold, &TouchHoldWatcher::longPress, this, [this] {
