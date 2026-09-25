@@ -100,6 +100,11 @@ find_package(WaylandProtocols 1.19 REQUIRED)
 
 add_subdirectory(kcm)
 add_subdirectory(src)
+
+# Panel widget that toggles the keyboard, for tablets without a hardware
+# keyboard to press the shortcut on.
+install(DIRECTORY plasmoid/org.kde.plasma.keyboard.custom.toggle DESTINATION ${KDE_INSTALL_DATADIR}/plasma/plasmoids)
+
 if(BUILD_TESTING)
     add_subdirectory(autotests)
 endif()

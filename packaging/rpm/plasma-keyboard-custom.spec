@@ -157,6 +157,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/org.kde.plasma.keyboa
 %{_datadir}/metainfo/org.kde.plasma.keyboard.custom.metainfo.xml
 %{_datadir}/config.kcfg/plasmakeyboardcustomsettings.kcfg
 %{_datadir}/plasma/keyboard-custom/
+%{_datadir}/plasma/plasmoids/org.kde.plasma.keyboard.custom.toggle/
 %{_libdir}/qt6/qml/QtQuick/VirtualKeyboard/Styles/PlasmaBreezeCustom/
 %{_libdir}/qt6/qml/org/kde/plasma/keyboard/custom/
 %{_prefix}/lib/udev/rules.d/70-plasma-keyboard-touchscreen.rules
