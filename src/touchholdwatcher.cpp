@@ -20,8 +20,7 @@
 namespace
 {
 // The touchscreen is identified by having both BTN_TOUCH and
-// ABS_MT_POSITION_X capabilities (touchpads lack the multi-touch axis
-// range, and virtual touch devices usually do not report ABS_MT).
+// ABS_MT_POSITION_X capabilities, plus INPUT_PROP_DIRECT (see isDirectInput()).
 bool hasCapability(int fd, int type, unsigned int code)
 {
     unsigned char bits[512];
@@ -30,6 +29,18 @@ bool hasCapability(int fd, int type, unsigned int code)
         return false;
     }
     return bits[code / 8] & (1 << (code % 8));
+}
+
+// Touchpads can have BTN_TOUCH and ABS_MT too (e.g. InputPlumber's virtual
+// touchpad on handhelds); only a touchscreen is a direct input device.
+bool isDirectInput(int fd)
+{
+    unsigned char props[INPUT_PROP_CNT / 8 + 1];
+    memset(props, 0, sizeof(props));
+    if (ioctl(fd, EVIOCGPROP(sizeof(props)), props) < 0) {
+        return false;
+    }
+    return props[INPUT_PROP_DIRECT / 8] & (1 << (INPUT_PROP_DIRECT % 8));
 }
 }
 
@@ -64,7 +75,7 @@ bool TouchHoldWatcher::openTouchscreen()
         if (fd < 0) {
             continue;
         }
-        if (hasCapability(fd, EV_ABS, ABS_MT_POSITION_X) && hasCapability(fd, EV_KEY, BTN_TOUCH)) {
+        if (hasCapability(fd, EV_ABS, ABS_MT_POSITION_X) && hasCapability(fd, EV_KEY, BTN_TOUCH) && isDirectInput(fd)) {
             m_fd = fd;
             m_notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
             connect(m_notifier, &QSocketNotifier::activated, this, &TouchHoldWatcher::readEvents);
