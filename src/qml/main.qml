@@ -21,6 +21,22 @@ InputPanelWindow {
     width: Screen.width
     color: 'transparent'
 
+    // The style sizes the panel from the screen size, but as a QtObject its own
+    // Screen attached property does not follow this window (see style.qml).
+    // This window is always as large as the screen the keyboard is on.
+    Binding {
+        target: inputPanel.keyboard ? inputPanel.keyboard.style : null
+        property: "screenWidth"
+        value: root.width
+        when: inputPanel.keyboard && inputPanel.keyboard.style && inputPanel.keyboard.style.screenWidth !== undefined
+    }
+    Binding {
+        target: inputPanel.keyboard ? inputPanel.keyboard.style : null
+        property: "screenHeight"
+        value: root.height
+        when: inputPanel.keyboard && inputPanel.keyboard.style && inputPanel.keyboard.style.screenWidth !== undefined
+    }
+
     onVisibleChanged: {
         if (visible) {
             // The window is unmapped while the keyboard is hidden, which also

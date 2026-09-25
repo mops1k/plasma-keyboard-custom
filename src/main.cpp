@@ -178,6 +178,13 @@ public:
     {
         m_stub = stub;
         applyStubMask();
+        // The stub's screen is corrected by QWaylandInputPanelSurface::applyConfigure()
+        // once the compositor tells it which output the panel actually belongs
+        // to (see qwaylandinputpanelsurface.cpp); that correction arrives after
+        // a Wayland round trip, i.e. later than this call. The layer-shell
+        // keyboard window never receives that information itself, so it is
+        // kept in sync with whatever screen the stub ends up on instead.
+        connect(stub, &QWindow::screenChanged, this, &KeyboardWindowBridge::syncKeyboardScreen);
     }
 
     //! The layer-shell window of the keyboard, which carries the space the
@@ -191,6 +198,7 @@ public:
     void setKeyboardWindow(QWindow *window)
     {
         m_keyboard = window;
+        syncKeyboardScreen();
         // KWin drives the keyboard through the panel stub and reports it as
         // visible only while that stub is mapped, so the stub follows the real
         // keyboard window (which Qt Virtual Keyboard shows and hides itself):
@@ -308,6 +316,23 @@ private:
             m_layerShell->setExclusiveZone(m_panelRect.isValid() ? m_panelRect.height() : 0);
         }
         m_layerShell->setAnchors(anchors);
+    }
+
+    //! Keeps the layer-shell keyboard window on the same screen as the panel
+    //! stub. Left on whatever screen Qt assigned it at creation (normally the
+    //! primary one), every dimension main.qml computes from the QML Screen
+    //! attached property (its own width/height, the style's target sizes) is
+    //! wrong on any setup where the keyboard is not shown on the primary
+    //! screen, and the panel ends up clipped or overlapping on both edges,
+    //! exactly like the panel stub did before QWaylandInputPanelSurface
+    //! started calling setScreen() itself.
+    void syncKeyboardScreen()
+    {
+        if (!m_stub || !m_keyboard || !m_stub->screen() || m_keyboard->screen() == m_stub->screen()) {
+            return;
+        }
+        m_keyboard->setScreen(m_stub->screen());
+        applyPanelLayout();
     }
 
     //! Keeps the panel stub mapped exactly while the keyboard window is mapped.

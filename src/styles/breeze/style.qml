@@ -81,13 +81,22 @@ KeyboardStyle {
         }
     }
 
+    // Size of the screen the keyboard is shown on. KeyboardStyle is a QtObject,
+    // not an Item, so the Screen attached property here does not follow the
+    // keyboard window: it resolves to some default screen, which on a
+    // multi-monitor setup can be a different (even portrait) one. main.qml
+    // binds these to the keyboard window's own size; Screen is only the
+    // fallback for a window that does not.
+    property real screenWidth: Screen.width
+    property real screenHeight: Screen.height
+
     // Always have the keyboard panel be 42% of the screen height, or 150px (whichever is larger)
-    readonly property real targetKeyboardHeight: Math.max(Screen.height * (PlasmaKeyboardSettings.keyboardHeightPercent / 100.0), 150)
+    readonly property real targetKeyboardHeight: Math.max(screenHeight * (PlasmaKeyboardSettings.keyboardHeightPercent / 100.0), 150)
 
     // The value to multiply the height by to get the width
     readonly property real aspectRatio: {
         // Ratio to just fill the screen width
-        const fillScreenWidth = Screen.width / targetKeyboardHeight;
+        const fillScreenWidth = screenWidth / targetKeyboardHeight;
         if (PlasmaKeyboardSettings.panelFillScreenWidth) {
             return fillScreenWidth;
         }
@@ -99,10 +108,10 @@ KeyboardStyle {
     // Calculate width based on the height so that the keyboard height is always targetKeyboardHeight
     keyboardDesignWidth: aspectRatio * keyboardDesignHeight;
     keyboardDesignHeight: {
-        if (Screen.width < 500) {
+        if (screenWidth < 500) {
             // Phone mode
             return 800;
-        } else if (Screen.width < 1200) {
+        } else if (screenWidth < 1200) {
             // Wider
             return 600;
         }
