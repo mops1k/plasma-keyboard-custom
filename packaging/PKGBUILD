@@ -18,6 +18,7 @@ license=('GPL-2.0-or-later')
 # repository. The build no longer depends on the local makepkg.conf defaults.
 options=('!debug')
 depends=(
+  'glib2'
   'glibc'
   'kcmutils'
   'kconfig'
