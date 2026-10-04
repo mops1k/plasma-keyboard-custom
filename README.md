@@ -110,6 +110,22 @@ kwriteconfig6 --notify --file kwinrc --group Wayland --key InputMethod \
 Then pick **plasma-keyboard-custom** in **System Settings → Virtual Keyboard**; its own settings are under
 **System Settings → Plasma Keyboard (custom)**. It installs next to the official `plasma-keyboard` package.
 
+#### Use the stock keyboard on the lock screen
+
+The custom keyboard normally remains selected on the lock screen. On devices where the stock Plasma Keyboard is a
+better fit for password entry, enable the optional user service after installing both keyboards:
+
+```sh
+systemctl --user enable --now plasma-keyboard-lock-switcher.service
+```
+
+The service selects the stock `plasma-keyboard` while the screen is locked and restores
+`plasma-keyboard-custom` after unlocking. Disable it to keep one keyboard selected everywhere:
+
+```sh
+systemctl --user disable --now plasma-keyboard-lock-switcher.service
+```
+
 To build the package yourself: `bash packaging/build.sh`.
 
 ### Install from the pacman repository

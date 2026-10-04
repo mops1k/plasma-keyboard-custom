@@ -101,6 +101,22 @@ find_package(WaylandProtocols 1.19 REQUIRED)
 add_subdirectory(kcm)
 add_subdirectory(src)
 
+# Optional user service for devices where the stock keyboard is preferable on
+# the lock screen. It is installed disabled and can be enabled by the user.
+configure_file(
+    tools/plasma-keyboard-lock-switcher.service.in
+    ${CMAKE_CURRENT_BINARY_DIR}/plasma-keyboard-lock-switcher.service
+    @ONLY
+)
+install(
+    PROGRAMS tools/plasma-keyboard-lock-switcher
+    DESTINATION ${KDE_INSTALL_LIBEXECDIR}
+)
+install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/plasma-keyboard-lock-switcher.service
+    DESTINATION ${KDE_INSTALL_SYSTEMDUSERUNITDIR}
+)
+
 # Panel widget that toggles the keyboard, for tablets without a hardware
 # keyboard to press the shortcut on.
 install(DIRECTORY plasmoid/org.kde.plasma.keyboard.custom.toggle DESTINATION ${KDE_INSTALL_DATADIR}/plasma/plasmoids)

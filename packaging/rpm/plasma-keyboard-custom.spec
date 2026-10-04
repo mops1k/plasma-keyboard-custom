@@ -65,6 +65,7 @@ BuildRequires:  kf6-kitemmodels-devel
 # only the QML modules and the data the application loads at runtime have to be
 # named here.
 Requires:       qt6-qtbase
+Requires:       glib2
 Requires:       qt6-qtdeclarative
 Requires:       qt6-qtvirtualkeyboard
 Requires:       qt6-qtmultimedia
@@ -153,6 +154,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/org.kde.plasma.keyboa
 %license LICENSES/*
 %doc README.md
 %{_bindir}/plasma-keyboard-custom
+%{_libexecdir}/plasma-keyboard-lock-switcher
 %{_datadir}/applications/org.kde.plasma.keyboard.custom.desktop
 %{_datadir}/metainfo/org.kde.plasma.keyboard.custom.metainfo.xml
 %{_datadir}/config.kcfg/plasmakeyboardcustomsettings.kcfg
@@ -163,6 +165,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/org.kde.plasma.keyboa
 %{_prefix}/lib/udev/rules.d/70-plasma-keyboard-touchscreen.rules
 %{_datadir}/locale/*/LC_MESSAGES/kcm_plasmakeyboardcustom.mo
 %{_datadir}/locale/*/LC_MESSAGES/plasma-keyboard-custom.mo
+%{_userunitdir}/plasma-keyboard-lock-switcher.service
 
 %files -n kcm-%{name}
 %{_libdir}/qt6/plugins/plasma/kcms/systemsettings/kcm_plasmakeyboardcustom.so

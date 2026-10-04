@@ -1,0 +1,51 @@
+#!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 Plasma Keyboard contributors
+# SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
+
+set -u
+
+session_keyboard=${1:?missing session keyboard desktop file}
+lock_keyboard=${2:?missing lock-screen keyboard desktop file}
+
+set_keyboard()
+{
+    local desktop_file=$1
+    local configured
+
+    configured=$(kreadconfig6 --file kwinrc --group Wayland --key InputMethod)
+    if [[ $configured == "$desktop_file" ]]; then
+        return
+    fi
+
+    kwriteconfig6 --notify --file kwinrc --group Wayland --key InputMethod "$desktop_file"
+}
+
+apply_current_state()
+{
+    local active
+
+    active=$(gdbus call --session \
+        --dest org.freedesktop.ScreenSaver \
+        --object-path /ScreenSaver \
+        --method org.freedesktop.ScreenSaver.GetActive)
+    if [[ $active == "(true,)" ]]; then
+        set_keyboard "$lock_keyboard"
+    else
+        set_keyboard "$session_keyboard"
+    fi
+}
+
+apply_current_state
+
+while IFS= read -r event; do
+    case $event in
+        *"org.freedesktop.ScreenSaver.ActiveChanged (true,)"*)
+            set_keyboard "$lock_keyboard"
+            ;;
+        *"org.freedesktop.ScreenSaver.ActiveChanged (false,)"*)
+            set_keyboard "$session_keyboard"
+            ;;
+    esac
+done < <(gdbus monitor --session \
+    --dest org.freedesktop.ScreenSaver \
+    --object-path /ScreenSaver)

@@ -37,6 +37,12 @@ QString kwinInputMethod()
     return group.readEntry(QStringLiteral("InputMethod"));
 }
 
+bool customInputMethodIsConfigured()
+{
+    const QString desktopFile = QFileInfo(kwinInputMethod()).fileName();
+    return desktopFile.startsWith(QStringLiteral("org.kde.plasma.keyboard.custom"));
+}
+
 void writeKwinInputMethod(const QString &value)
 {
     QProcess::execute(QStringLiteral("kwriteconfig6"),
@@ -98,7 +104,7 @@ RestartWatcher::RestartWatcher(QObject *parent)
     m_size = info.size();
     m_sinceDetection.start();
 
-    if (kwinInputMethod().isEmpty()) {
+    if (!customInputMethodIsConfigured()) {
         // This process is not the configured input method, so KWin will not
         // keep it alive: nothing to restart.
         return;
@@ -170,9 +176,9 @@ int runInputMethodWatchdog()
     constexpr int s_startGraceMs = 20000;
 
     for (;;) {
-        if (kwinInputMethod().isEmpty()) {
-            // The virtual keyboard is disabled in the system settings, so there
-            // is no input method to keep alive.
+        if (!customInputMethodIsConfigured()) {
+            // Another virtual keyboard is configured (or virtual keyboards are
+            // disabled), so it is not ours to keep alive.
             QThread::msleep(s_checkIntervalMs);
             continue;
         }

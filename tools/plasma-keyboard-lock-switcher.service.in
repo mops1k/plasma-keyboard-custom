@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Plasma Keyboard contributors
+# SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
+
+[Unit]
+Description=Use Plasma Keyboard on the lock screen and the custom keyboard in the session
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@KDE_INSTALL_FULL_LIBEXECDIR@/plasma-keyboard-lock-switcher @KDE_INSTALL_FULL_APPDIR@/org.kde.plasma.keyboard.custom.desktop @KDE_INSTALL_FULL_APPDIR@/org.kde.plasma.keyboard.desktop
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=graphical-session.target
