@@ -313,9 +313,24 @@ private:
         } else {
             anchors |= LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom | LayerShellQt::Window::AnchorRight);
             m_layerShell->setDesiredSize(QSize(0, screen.height()));
-            m_layerShell->setExclusiveZone(m_panelRect.isValid() ? m_panelRect.height() : 0);
+            // The space at the bottom is only reserved while the Plasma panel is
+            // moved out of the way (autohide) together with the keyboard. When
+            // the user asked for the panel to stay, reserving the keyboard's
+            // height makes the compositor shrink the available area and the
+            // panel ends up above the keyboard; without the reserved zone the
+            // panel stays at the bottom of the screen and the keyboard, which is
+            // in the overlay layer, covers it.
+            const bool reserveSpace = PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible();
+            m_layerShell->setExclusiveZone(reserveSpace && m_panelRect.isValid() ? m_panelRect.height() : 0);
         }
         m_layerShell->setAnchors(anchors);
+        // Layer-shell properties only reach the compositor with the next commit
+        // of the surface, so ask for one: without it the reserved space changed
+        // by a setting (or by a panel that changed while the keyboard was on
+        // screen) would only take effect on the next show.
+        if (m_keyboard) {
+            m_keyboard->requestUpdate();
+        }
     }
 
     //! Keeps the layer-shell keyboard window on the same screen as the panel
@@ -401,6 +416,9 @@ public:
         // this application, so SettingsReloader watches the file itself.
         connect(&m_settingsReloader, &SettingsReloader::settingsReloaded, this, [this] {
             applyConfiguredMode();
+            // The reserved space depends on whether the panel is hidden with the
+            // keyboard, so the layout has to follow a changed setting as well.
+            m_bridge->updatePanelLayout();
             updatePanelVisibility();
         });
         applyConfiguredMode();
