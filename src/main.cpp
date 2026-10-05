@@ -28,6 +28,7 @@
 
 #include <QAction>
 #include <QCommandLineParser>
+#include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusVariant>
@@ -108,6 +109,46 @@ void evaluatePlasmaScript(const QString &script, bool blocking = false)
     } else {
         QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
     }
+}
+
+// Space the Plasma panels take on a screen, as reported by plasmashell. The
+// compositor does not tell clients about the available area, and the keyboard
+// needs it to stay above a panel that is left in place: such a panel keeps no
+// reserved space of its own (see KeyboardHotkeyController::hidePanels()), so the
+// keyboard has to reserve the panel's height as well and to lift itself by it.
+QMargins plasmaPanelInsets(const QString &screenName, const QSize &screenSize)
+{
+    if (screenName.isEmpty()) {
+        return QMargins();
+    }
+    QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.plasmashell"),
+                                                      QStringLiteral("/StrutManager"),
+                                                      QStringLiteral("org.kde.PlasmaShell.StrutManager"),
+                                                      QStringLiteral("availableScreenRect"));
+    msg << screenName;
+    const QDBusMessage reply = QDBusConnection::sessionBus().call(msg, QDBus::Block, 500);
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+        return QMargins();
+    }
+    // The compositor answers with a plain (iiii) structure, which Qt does not
+    // turn into a QRect on its own.
+    const QVariant value = reply.arguments().constFirst();
+    QRect rect = value.toRect();
+    if (!rect.isValid() && value.canConvert<QDBusArgument>()) {
+        int x = 0;
+        int y = 0;
+        int width = 0;
+        int height = 0;
+        const QDBusArgument arg = value.value<QDBusArgument>();
+        arg.beginStructure();
+        arg >> x >> y >> width >> height;
+        arg.endStructure();
+        rect = QRect(x, y, width, height);
+    }
+    if (!rect.isValid() || screenSize.isEmpty()) {
+        return QMargins();
+    }
+    return QMargins(rect.x(), rect.y(), qMax(0, screenSize.width() - rect.x() - rect.width()), qMax(0, screenSize.height() - rect.y() - rect.height()));
 }
 
 // Panel containment ids mapped to their configured hiding mode, read from the
@@ -242,6 +283,27 @@ public:
         applyPanelLayout();
     }
 
+    //! Re-reads the space the Plasma panels take on the keyboard's screen. Needed
+    //! while a panel is left in place: the keyboard then has to reserve that
+    //! space as well and to keep above the panel (see applyPanelLayout()).
+    void refreshPanelInsets()
+    {
+        if (!m_keyboard || !m_keyboard->screen()) {
+            m_panelInsets = QMargins();
+            return;
+        }
+        m_panelInsets = plasmaPanelInsets(m_keyboard->screen()->name(), m_keyboard->screen()->geometry().size());
+        qCDebug(PlasmaKeyboard) << "Plasma panel insets on" << m_keyboard->screen()->name() << m_panelInsets;
+    }
+
+    //! Whether the Plasma panel sits at the bottom of the screen. Only then can
+    //! the keyboard be lifted above it; a panel at the top or on the side keeps
+    //! its own behaviour (see applyPanelLayout()).
+    bool panelAtBottom() const
+    {
+        return m_panelInsets.bottom() > 0 && m_panelInsets.top() == 0;
+    }
+
     //! Tells Qt that the keyboard window is the window the input goes to. Qt
     //! Virtual Keyboard only shows the panel while that is the case, and the
     //! compositor never activates a layer-shell window on its own, so a show
@@ -306,22 +368,31 @@ private:
         }
         const QSize screen = m_keyboard && m_keyboard->screen() ? m_keyboard->screen()->geometry().size() : QSize(1280, 800);
         LayerShellQt::Window::Anchors anchors = LayerShellQt::Window::AnchorLeft;
+        // The panel is left in place when the user asked for it: it then keeps no
+        // reserved space of its own, so the keyboard has to keep above it (see
+        // hidePanels() and refreshPanelInsets()).
+        const bool panelStays = !PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible();
+        // Only a panel at the bottom can be covered by the keyboard; it is also
+        // the only case where the keyboard has to be lifted by the panel height.
+        const bool liftOverPanel = panelStays && panelAtBottom();
         if (PlasmaKeyboardSettings::self()->floatingKeyboard()) {
             anchors |= LayerShellQt::Window::AnchorTop;
             m_layerShell->setDesiredSize(screen);
             m_layerShell->setExclusiveZone(0);
+            m_layerShell->setMargins(QMargins());
         } else {
             anchors |= LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom | LayerShellQt::Window::AnchorRight);
             m_layerShell->setDesiredSize(QSize(0, screen.height()));
-            // The space at the bottom is only reserved while the Plasma panel is
-            // moved out of the way (autohide) together with the keyboard. When
-            // the user asked for the panel to stay, reserving the keyboard's
-            // height makes the compositor shrink the available area and the
-            // panel ends up above the keyboard; without the reserved zone the
-            // panel stays at the bottom of the screen and the keyboard, which is
-            // in the overlay layer, covers it.
-            const bool reserveSpace = PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible();
-            m_layerShell->setExclusiveZone(reserveSpace && m_panelRect.isValid() ? m_panelRect.height() : 0);
+            // The space at the bottom is reserved so that the compositor moves
+            // the focused window out of the way and the keyboard does not float
+            // over it. While the Plasma panel is hidden together with the
+            // keyboard that space is the keyboard alone; when the panel stays it
+            // reserves nothing itself, so the keyboard is lifted above it with
+            // the bottom margin (which the compositor counts as reserved space
+            // as well).
+            const int panelHeight = m_panelRect.isValid() ? m_panelRect.height() : 0;
+            m_layerShell->setExclusiveZone(panelHeight);
+            m_layerShell->setMargins(QMargins(0, 0, 0, liftOverPanel ? m_panelInsets.bottom() : 0));
         }
         m_layerShell->setAnchors(anchors);
         // Layer-shell properties only reach the compositor with the next commit
@@ -367,6 +438,7 @@ private:
     QPointer<QWindow> m_keyboard;
     QPointer<LayerShellQt::Window> m_layerShell;
     QRect m_panelRect;
+    QMargins m_panelInsets;
     bool m_kwinVisible = false;
 };
 
@@ -416,8 +488,10 @@ public:
         // this application, so SettingsReloader watches the file itself.
         connect(&m_settingsReloader, &SettingsReloader::settingsReloaded, this, [this] {
             applyConfiguredMode();
-            // The reserved space depends on whether the panel is hidden with the
-            // keyboard, so the layout has to follow a changed setting as well.
+            // The panel mode and the reserved space depend on the settings, so
+            // put the panel back and let updatePanelVisibility() apply the mode
+            // the settings ask for.
+            restorePanels();
             m_bridge->updatePanelLayout();
             updatePanelVisibility();
         });
@@ -486,9 +560,21 @@ public Q_SLOTS:
         }
 
         // The floating keyboard does not reach the bottom of the screen, so the
-        // Plasma panel is left alone while it is on.
+        // Plasma panel is left alone while it is on. A panel that is not at the
+        // bottom is left alone as well: the keyboard does not cover it, so it
+        // keeps reserving its own space.
         const bool floating = PlasmaKeyboardSettings::self()->floatingKeyboard();
-        if (!floating && PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible() && keyboardVisible) {
+        const bool hidePanel = PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible();
+        if (keyboardVisible != m_lastPanelLayoutVisible) {
+            m_lastPanelLayoutVisible = keyboardVisible;
+            if (!floating && keyboardVisible) {
+                // Read the panel space before the panel is left in place: it then
+                // keeps no reserved space of its own (see hidePanels()).
+                m_bridge->refreshPanelInsets();
+            }
+            m_bridge->updatePanelLayout();
+        }
+        if (!floating && keyboardVisible && (hidePanel || m_bridge->panelAtBottom())) {
             hidePanels();
         } else {
             restorePanels();
@@ -530,7 +616,12 @@ private:
             return;
         }
         m_panelsHidden = true;
-        evaluatePlasmaScript(QStringLiteral("panelIds.forEach(function(id){var p=panelById(id);if(p.hiding!==\"autohide\"){p.hiding=\"autohide\";}});"));
+        // Hidden (autohide) when the user asked for it; otherwise the panel is
+        // left at the bottom of the screen without reserved space of its own
+        // ("windows go below"), so that the keyboard can sit above it instead of
+        // pushing it up.
+        const QString mode = PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible() ? QStringLiteral("autohide") : QStringLiteral("windowsgobelow");
+        evaluatePlasmaScript(QStringLiteral("panelIds.forEach(function(id){var p=panelById(id);if(p.hiding!==\"%1\"){p.hiding=\"%1\";}});").arg(mode));
     }
 
     void restorePanels(bool blocking = false)
@@ -554,6 +645,7 @@ private:
     QHash<int, QString> m_panelHidingModes;
     bool m_panelsHidden = false;
     bool m_lastKeyboardVisible = false;
+    bool m_lastPanelLayoutVisible = false;
 };
 
 // signal handler for SIGINT & SIGTERM
