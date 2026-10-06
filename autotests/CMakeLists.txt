@@ -112,6 +112,7 @@ ecm_add_test(sttenginestest.cpp
     ../src/stt/sttengine.cpp
     ../src/stt/parakeetengine.cpp
     ../src/stt/whisperengine.cpp
+    ../src/stt/gigaamengine.cpp
     ../src/stt/voskengine.cpp
     ../src/stt/sttaudiorecorder.cpp
     TEST_NAME sttenginestest

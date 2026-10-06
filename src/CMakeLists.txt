@@ -59,6 +59,50 @@ foreach(whisper_target ggml ggml-base ggml-cpu ggml-blas ggml-openmp whisper par
     endif()
 endforeach()
 
+# The GigaAM engine uses transcribe.cpp (MIT), which is built as a library of
+# its own instead of being added as a subproject: it vendors its own copy of
+# ggml, whose target and symbol names would collide with the ggml whisper.cpp
+# brings into the keyboard. The library is loaded while the application runs
+# (src/stt/gigaamengine.cpp) and installed next to the keyboard, so the engine
+# reports itself unavailable when it is not there.
+#
+# TRANSCRIBE_CPP_SOURCE_DIR lets the package build use a source archive instead
+# of a git checkout, the same way WHISPER_CPP_SOURCE_DIR does.
+include(ExternalProject)
+set(TRANSCRIBE_CPP_SOURCE_DIR "" CACHE PATH "Local transcribe.cpp source tree used instead of downloading one")
+set(_transcribe_cpp_prefix ${CMAKE_CURRENT_BINARY_DIR}/transcribe-cpp)
+set(_transcribe_cpp_install ${_transcribe_cpp_prefix}/install)
+if(TRANSCRIBE_CPP_SOURCE_DIR)
+    set(_transcribe_cpp_source SOURCE_DIR ${TRANSCRIBE_CPP_SOURCE_DIR})
+else()
+    set(_transcribe_cpp_source
+        GIT_REPOSITORY https://github.com/handy-computer/transcribe.cpp.git
+        GIT_TAG 5bb2deb2a4afb1fd50534ecb51cfcb521ef94944
+        GIT_SHALLOW FALSE
+    )
+endif()
+ExternalProject_Add(transcribe_cpp
+    ${_transcribe_cpp_source}
+    PREFIX ${_transcribe_cpp_prefix}
+    CMAKE_ARGS
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_INSTALL_PREFIX=${_transcribe_cpp_install}
+        "-DCMAKE_INSTALL_RPATH=\$ORIGIN"
+        -DTRANSCRIBE_BUILD_SHARED=ON
+        -DTRANSCRIBE_INSTALL=ON
+        -DTRANSCRIBE_BUILD_TESTS=OFF
+        -DTRANSCRIBE_BUILD_EXAMPLES=OFF
+        -DTRANSCRIBE_BUILD_TOOLS=OFF
+        # The system BLAS probe of transcribe.cpp finds the reference libblas
+        # and then cannot resolve the cblas symbols, so the decoder runs
+        # without system BLAS. That is fast enough for the keyboard.
+        -DTRANSCRIBE_USE_SYSTEM_BLAS=OFF
+    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target transcribe
+    INSTALL_COMMAND ${CMAKE_COMMAND} --install <BINARY_DIR>
+    UPDATE_COMMAND ""
+    LOG_BUILD ON
+)
+
 add_executable(plasma-keyboard-custom)
 
 ecm_add_qtwayland_client_protocol(plasma-keyboard-custom PROTOCOL ${WaylandProtocols_DATADIR}/unstable/input-method/input-method-unstable-v1.xml BASENAME input-method-unstable-v1)
@@ -128,6 +172,8 @@ target_sources(plasma-keyboard-custom PRIVATE
     stt/sttmodelcatalog.cpp
     stt/sttmodelcatalog.h
     stt/stt.qrc
+    stt/gigaamengine.cpp
+    stt/gigaamengine.h
     stt/parakeetengine.cpp
     stt/parakeetengine.h
     stt/whisperengine.cpp
@@ -238,8 +284,23 @@ endif()
 # libhunspell is an optional dependency: the engine loads it while the
 # application runs, so nothing is linked against it here.
 
+# The GigaAM engine loads libtranscribe while it runs and looks for it in the
+# directory the keyboard itself is installed into first: a local build keeps
+# the library in the same prefix, which is not part of the loader search path.
+target_compile_definitions(plasma-keyboard-custom PRIVATE TRANSCRIBE_LIBRARY_DIR="${KDE_INSTALL_FULL_LIBDIR}")
+add_dependencies(plasma-keyboard-custom transcribe_cpp)
+
 install(TARGETS plasma-keyboard-custom ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 install(PROGRAMS org.kde.plasma.keyboard.custom.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+
+# The transcribe.cpp libraries (libtranscribe and the ggml it carries) belong
+# to the keyboard: they are installed next to the binary.
+install(DIRECTORY ${_transcribe_cpp_install}/lib/
+    DESTINATION ${KDE_INSTALL_LIBDIR}
+    FILES_MATCHING
+    PATTERN "libtranscribe.so*"
+    PATTERN "libggml*.so*"
+)
 
 add_subdirectory(styles)
 add_subdirectory(qmlplugin)

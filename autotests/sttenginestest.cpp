@@ -9,6 +9,7 @@
 #include <QTest>
 #include <QVector>
 
+#include "gigaamengine.h"
 #include "parakeetengine.h"
 #include "sttaudiorecorder.h"
 #include "voskengine.h"
@@ -105,6 +106,13 @@ private Q_SLOTS:
         QVERIFY(!whisper.displayName().isEmpty());
         QVERIFY(whisper.isAvailable());
         QVERIFY(!whisper.hasModel());
+
+        // GigaAM is loaded from transcribe.cpp while the application runs, so
+        // the engine may legitimately be unavailable in a test environment.
+        GigaamEngine gigaam;
+        QCOMPARE(gigaam.id(), QStringLiteral("gigaam"));
+        QVERIFY(!gigaam.displayName().isEmpty());
+        QVERIFY(!gigaam.hasModel());
     }
 
     void recorderSeesMicrophones()
@@ -185,6 +193,34 @@ private Q_SLOTS:
         const QString text = engine.transcribe(samples, QString(), &error);
         QVERIFY2(error.isEmpty(), qPrintable(error));
         qInfo() << "vosk recognised:" << text;
+        QVERIFY(!text.trimmed().isEmpty());
+    }
+
+    void gigaamTranscribes()
+    {
+        const QString model = modelFromEnvironment("PLASMA_KEYBOARD_STT_TEST_GIGAAM_MODEL");
+        if (model.isEmpty()) {
+            QSKIP("PLASMA_KEYBOARD_STT_TEST_GIGAAM_MODEL is not set to a GigaAM GGUF model");
+        }
+        const QVector<float> samples = sampleAudio();
+        if (samples.isEmpty()) {
+            QSKIP("PLASMA_KEYBOARD_STT_TEST_WAV is not set to a 16 kHz mono WAV file");
+        }
+
+        GigaamEngine engine;
+        QString reason;
+        if (!engine.isAvailable(&reason)) {
+            QSKIP(qPrintable(reason));
+        }
+
+        QString error;
+        QVERIFY2(engine.loadModel(model, &error), qPrintable(error));
+        QVERIFY(engine.hasModel());
+
+        // GigaAM v3 is a Russian model, so the language hint is not used.
+        const QString text = engine.transcribe(samples, QStringLiteral("ru"), &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        qInfo() << "gigaam recognised:" << text;
         QVERIFY(!text.trimmed().isEmpty());
     }
 };

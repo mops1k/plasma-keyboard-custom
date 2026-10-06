@@ -168,6 +168,30 @@
             "file": "vosk-model-small-pt-0.3.zip",
             "archive": true,
             "default": false
+        },
+        {
+            "id": "gigaam-v3-e2e-rnnt-q8_0",
+            "engine": "gigaam",
+            "name": "GigaAM v3 e2e RNN-T (Q8_0)",
+            "language": "ru",
+            "size": 273724832,
+            "sha256": "78d63b47723b7f8d78c6113a6ef983b5a86e2a86f6c273e1f5cb6967b1c4467a",
+            "url": "https://huggingface.co/handy-computer/gigaam-v3-e2e-rnnt-gguf/resolve/main/gigaam-v3-e2e-rnnt-Q8_0.gguf",
+            "file": "gigaam-v3-e2e-rnnt-Q8_0.gguf",
+            "archive": false,
+            "default": false
+        },
+        {
+            "id": "gigaam-v3-e2e-ctc-q8_0",
+            "engine": "gigaam",
+            "name": "GigaAM v3 e2e CTC (Q8_0)",
+            "language": "ru",
+            "size": 272151136,
+            "sha256": "9ccce4750dc813a493d96ca15ee251712bedec15ac9a02fa3d2bd732f08ae5eb",
+            "url": "https://huggingface.co/handy-computer/gigaam-v3-e2e-ctc-gguf/resolve/main/gigaam-v3-e2e-ctc-Q8_0.gguf",
+            "file": "gigaam-v3-e2e-ctc-Q8_0.gguf",
+            "archive": false,
+            "default": false
         }
     ]
 }

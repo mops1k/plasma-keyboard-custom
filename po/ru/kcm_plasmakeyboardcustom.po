@@ -662,6 +662,10 @@ msgid "Whisper"
 msgstr "Whisper"
 
 #: ui/SttSettingsPage.qml
+msgid "GigaAM v3 (Russian)"
+msgstr "GigaAM v3 (русский)"
+
+#: ui/SttSettingsPage.qml
 msgid "Vosk"
 msgstr "Vosk"
 
@@ -714,8 +718,8 @@ msgid "Engine:"
 msgstr "Движок:"
 
 #: ui/SttSettingsPage.qml
-msgid "Parakeet v3 recognises the most languages and is the fastest; Whisper is the classic model; Vosk has the smallest models."
-msgstr "Parakeet v3 распознаёт больше всего языков и работает быстрее всех; Whisper — классическая модель; у Vosk самые маленькие модели."
+msgid "Parakeet v3 recognises the most languages and is the fastest; Whisper is the classic model; GigaAM v3 is trained for Russian; Vosk has the smallest models."
+msgstr "Parakeet v3 распознаёт больше всего языков и работает быстрее всех; Whisper — классическая модель; GigaAM v3 обучен на русском; у Vosk самые маленькие модели."
 
 #: ui/SttSettingsPage.qml
 msgid "Models"

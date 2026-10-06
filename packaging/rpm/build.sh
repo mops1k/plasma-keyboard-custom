@@ -27,15 +27,23 @@ git -C "$root" archive --format=tar.gz \
     --prefix="plasma-keyboard-custom-$version/" HEAD \
     > "plasma-keyboard-custom-$version.tar.gz"
 
-# The speech recognition engines are built from whisper.cpp. The RPM build step
-# has no network, so its source archive is fetched here, next to the project
-# tarball (the spec takes both from this directory).
+# The speech recognition engines are built from whisper.cpp (Whisper and
+# Parakeet) and transcribe.cpp (GigaAM). The RPM build step has no network, so
+# their source archives are fetched here, next to the project tarball (the spec
+# takes all of them from this directory).
 whisper_version="$(sed -n 's/^%global whisper_version \(.*\)$/\1/p' plasma-keyboard-custom.spec | head -n1)"
 whisper_archive="whisper.cpp-$whisper_version.tar.gz"
 if [ ! -f "$whisper_archive" ]; then
     curl -L -o "$whisper_archive" "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v$whisper_version.tar.gz"
 fi
 echo "1650f884effba487025143bd8facd2f9fb40a83b3737a732803c67a8d659d9c0  $whisper_archive" | sha256sum -c -
+
+transcribe_commit="$(sed -n 's/^%global transcribe_commit \(.*\)$/\1/p' plasma-keyboard-custom.spec | head -n1)"
+transcribe_archive="transcribe.cpp-$transcribe_commit.tar.gz"
+if [ ! -f "$transcribe_archive" ]; then
+    curl -L -o "$transcribe_archive" "https://github.com/handy-computer/transcribe.cpp/archive/$transcribe_commit.tar.gz"
+fi
+echo "c6491711a6eb3c44217118f20cdf3c9ce877d175e407c7a253a52e5c0c6a824d  $transcribe_archive" | sha256sum -c -
 
 topdir="$(mktemp -d)"
 trap 'rm -rf "$topdir"' EXIT

@@ -30,6 +30,10 @@ SettingsFormPage {
             "text": i18n("Whisper")
         },
         {
+            "value": "gigaam",
+            "text": i18n("GigaAM v3 (Russian)")
+        },
+        {
             "value": "vosk",
             "text": i18n("Vosk")
         }
@@ -95,7 +99,7 @@ SettingsFormPage {
 
     SettingsRow {
         label: i18n("Engine:")
-        description: i18n("Parakeet v3 recognises the most languages and is the fastest; Whisper is the classic model; Vosk has the smallest models.")
+        description: i18n("Parakeet v3 recognises the most languages and is the fastest; Whisper is the classic model; GigaAM v3 is trained for Russian; Vosk has the smallest models.")
         controlFillWidth: true
 
         QQC2.ComboBox {

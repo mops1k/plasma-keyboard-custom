@@ -6,6 +6,7 @@
 
 #include "sttmanager.h"
 
+#include "gigaamengine.h"
 #include "parakeetengine.h"
 #include "sttaudiorecorder.h"
 #include "sttengine.h"
@@ -72,7 +73,7 @@ QString SttManager::defaultEngineId()
 
 QStringList SttManager::engineIds()
 {
-    return {QStringLiteral("parakeet"), QStringLiteral("whisper"), QStringLiteral("vosk")};
+    return {QStringLiteral("parakeet"), QStringLiteral("whisper"), QStringLiteral("gigaam"), QStringLiteral("vosk")};
 }
 
 bool SttManager::isEnabled() const
@@ -265,6 +266,8 @@ void SttManager::createEngine()
         engine = new ParakeetEngine(this);
     } else if (id == QLatin1String("whisper")) {
         engine = new WhisperEngine(this);
+    } else if (id == QLatin1String("gigaam")) {
+        engine = new GigaamEngine(this);
     } else if (id == QLatin1String("vosk")) {
         engine = new VoskEngine(this);
     } else {

@@ -28,6 +28,11 @@ Source0:        %{name}-%{version}.tar.gz
 # during the build, so the build does not need the network.
 %global whisper_version 1.9.3
 Source1:        whisper.cpp-%{whisper_version}.tar.gz
+# The GigaAM engine is built from transcribe.cpp. It is a library of its own
+# (libtranscribe.so) because it vendors its own ggml, which cannot be linked
+# into the same binary as the ggml whisper.cpp brings in.
+%global transcribe_commit 5bb2deb2a4afb1fd50534ecb51cfcb521ef94944
+Source2:        transcribe.cpp-%{transcribe_commit}.tar.gz
 
 BuildArch:      x86_64
 
@@ -106,6 +111,7 @@ Configuration module for %{name}, shown in the system settings of Plasma.
 %prep
 %setup -q
 tar -xzf %{SOURCE1} -C %{_builddir}
+tar -xzf %{SOURCE2} -C %{_builddir}
 
 %build
 # Fedora ships the QtWaylandClient private headers in qt6-qtbase-private-devel
@@ -134,6 +140,7 @@ EOF
   -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_TESTING=OFF \
   -DWHISPER_CPP_SOURCE_DIR=%{_builddir}/whisper.cpp-%{whisper_version} \
+  -DTRANSCRIBE_CPP_SOURCE_DIR=%{_builddir}/transcribe.cpp-%{transcribe_commit} \
   -DQt6WaylandClientPrivate_DIR=%{_builddir}/qtwaylandclientprivate
 %cmake_build
 
@@ -162,6 +169,12 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/org.kde.plasma.keyboa
 %{_datadir}/plasma/plasmoids/org.kde.plasma.keyboard.custom.toggle/
 %{_libdir}/qt6/qml/QtQuick/VirtualKeyboard/Styles/PlasmaBreezeCustom/
 %{_libdir}/qt6/qml/org/kde/plasma/keyboard/custom/
+# The GigaAM engine: libtranscribe and the ggml it carries are loaded by the
+# keyboard while it runs.
+%{_libdir}/libtranscribe.so*
+%{_libdir}/libggml.so*
+%{_libdir}/libggml-base.so*
+%{_libdir}/libggml-cpu.so*
 %{_prefix}/lib/udev/rules.d/70-plasma-keyboard-touchscreen.rules
 %{_datadir}/locale/*/LC_MESSAGES/kcm_plasmakeyboardcustom.mo
 %{_datadir}/locale/*/LC_MESSAGES/plasma-keyboard-custom.mo
