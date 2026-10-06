@@ -110,6 +110,7 @@ target_sources(plasma-keyboard-custom PRIVATE
     overlay/textexpansiontrigger.h
     prediction.qrc
     icons.qrc
+    windowrestore.qrc
     prediction/predictivedictionary.cpp
     prediction/predictivedictionary.h
     prediction/hunspelldictionary.cpp

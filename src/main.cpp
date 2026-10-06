@@ -33,6 +33,7 @@
 #include <QDBusMessage>
 #include <QDBusVariant>
 #include <QDir>
+#include <QFile>
 #include <QGuiApplication>
 #include <QHash>
 #include <QJsonDocument>
@@ -109,6 +110,71 @@ void evaluatePlasmaScript(const QString &script, bool blocking = false)
     } else {
         QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
     }
+}
+
+// The virtual keyboard shrinks the windows it covers by itself, and KWin does
+// not always give them their size back (KDE bug 459136): the configure event
+// carrying the shrunken size is still on its way to the window when KWin asks
+// the window to grow back, so the window stays short. The workaround is a small
+// script inside KWin that keeps a snapshot of the geometry of the ordinary
+// windows and restores it once the keyboard is gone.
+//
+// KWin loads scripts from a file, so the script is unpacked from the resources
+// into the runtime directory. That is also the place a sandboxed build shares
+// with the compositor, unlike the data directory of the package.
+QString installWindowRestoreScript()
+{
+    QFile resource(QStringLiteral(":/plasma-keyboard/kwinkeyboardrestore.js"));
+    if (!resource.open(QIODevice::ReadOnly)) {
+        qCWarning(PlasmaKeyboard) << "Cannot read the bundled window geometry restore script";
+        return QString();
+    }
+    const QByteArray contents = resource.readAll();
+    resource.close();
+
+    QString directory = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+    if (directory.isEmpty()) {
+        directory = QDir::tempPath();
+    }
+    directory += QStringLiteral("/plasma-keyboard-custom");
+    if (!QDir().mkpath(directory)) {
+        qCWarning(PlasmaKeyboard) << "Cannot create" << directory << "for the window geometry restore script";
+        return QString();
+    }
+
+    const QString path = directory + QStringLiteral("/kwinkeyboardrestore.js");
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate) || file.write(contents) != contents.size()) {
+        qCWarning(PlasmaKeyboard) << "Cannot write the window geometry restore script to" << path;
+        return QString();
+    }
+    return path;
+}
+
+// Loads the window geometry restore script into KWin, or unloads it again.
+void setWindowRestoreScript(const QString &path, bool enabled)
+{
+    const auto call = [&path](const QString &method) {
+        QDBusMessage message =
+            QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Scripting"), QStringLiteral("org.kde.kwin.Scripting"), method);
+        message << path;
+        return QDBusConnection::sessionBus().call(message, QDBus::Block, 1000);
+    };
+
+    // The script can still be loaded from a previous run of the keyboard: KWin
+    // keeps it until it is asked to unload it, and loading it again would leave
+    // two copies of it running.
+    call(QStringLiteral("unloadScript"));
+    if (!enabled) {
+        return;
+    }
+
+    const QDBusMessage reply = call(QStringLiteral("loadScript"));
+    if (reply.type() != QDBusMessage::ReplyMessage) {
+        qCWarning(PlasmaKeyboard) << "Cannot load the window geometry restore script into KWin:" << reply.errorMessage();
+        return;
+    }
+    qCDebug(PlasmaKeyboard) << "window geometry restore script loaded from" << path;
 }
 
 // Space the Plasma panels take on a screen, as reported by plasmashell. The
@@ -845,6 +911,17 @@ int main(int argc, char **argv)
     // Restart with the new binary after the package was updated (see
     // RestartWatcher).
     new RestartWatcher(&application);
+
+    // KWin does not always give windows back the size the virtual keyboard took
+    // from them (KDE bug 459136), so a small script inside KWin watches the
+    // keyboard and returns the geometry to the windows it shortened.
+    const QString windowRestoreScript = installWindowRestoreScript();
+    if (!windowRestoreScript.isEmpty()) {
+        setWindowRestoreScript(windowRestoreScript, true);
+        QObject::connect(&application, &QCoreApplication::aboutToQuit, &application, [windowRestoreScript] {
+            setWindowRestoreScript(windowRestoreScript, false);
+        });
+    }
 
     return application.exec();
 }
