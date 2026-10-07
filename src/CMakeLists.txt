@@ -72,6 +72,12 @@ include(ExternalProject)
 set(TRANSCRIBE_CPP_SOURCE_DIR "" CACHE PATH "Local transcribe.cpp source tree used instead of downloading one")
 set(_transcribe_cpp_prefix ${CMAKE_CURRENT_BINARY_DIR}/transcribe-cpp)
 set(_transcribe_cpp_install ${_transcribe_cpp_prefix}/install)
+# The subproject installs its libraries next to the keyboard, so it needs the
+# name of the library directory (lib or lib64). Only the name is used: the
+# macro that configures the packages hands KDE_INSTALL_LIBDIR over as an
+# absolute path, and passing that on would make the subproject install into
+# that path directly, ignoring the prefix of this build.
+get_filename_component(_transcribe_cpp_libdir ${KDE_INSTALL_FULL_LIBDIR} NAME)
 if(TRANSCRIBE_CPP_SOURCE_DIR)
     set(_transcribe_cpp_source SOURCE_DIR ${TRANSCRIBE_CPP_SOURCE_DIR})
 else()
@@ -87,10 +93,9 @@ ExternalProject_Add(transcribe_cpp
     CMAKE_ARGS
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_INSTALL_PREFIX=${_transcribe_cpp_install}
-        # The library directory is passed through: on Fedora it is lib64, and
-        # the libraries have to land in the directory this project installs
-        # into, not in the subproject's own default.
-        -DCMAKE_INSTALL_LIBDIR=${KDE_INSTALL_LIBDIR}
+        # The library directory of the packages (lib64 on Fedora, lib on Arch),
+        # so the libraries land in the directory this project installs into.
+        -DCMAKE_INSTALL_LIBDIR=${_transcribe_cpp_libdir}
         "-DCMAKE_INSTALL_RPATH=\$ORIGIN"
         -DTRANSCRIBE_BUILD_SHARED=ON
         -DTRANSCRIBE_INSTALL=ON
@@ -299,7 +304,7 @@ install(PROGRAMS org.kde.plasma.keyboard.custom.desktop DESTINATION ${KDE_INSTAL
 
 # The transcribe.cpp libraries (libtranscribe and the ggml it carries) belong
 # to the keyboard: they are installed next to the binary.
-install(DIRECTORY ${_transcribe_cpp_install}/${KDE_INSTALL_LIBDIR}/
+install(DIRECTORY ${_transcribe_cpp_install}/${_transcribe_cpp_libdir}/
     DESTINATION ${KDE_INSTALL_LIBDIR}
     FILES_MATCHING
     PATTERN "libtranscribe.so*"
