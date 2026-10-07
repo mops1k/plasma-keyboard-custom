@@ -87,6 +87,10 @@ ExternalProject_Add(transcribe_cpp
     CMAKE_ARGS
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_INSTALL_PREFIX=${_transcribe_cpp_install}
+        # The library directory is passed through: on Fedora it is lib64, and
+        # the libraries have to land in the directory this project installs
+        # into, not in the subproject's own default.
+        -DCMAKE_INSTALL_LIBDIR=${KDE_INSTALL_LIBDIR}
         "-DCMAKE_INSTALL_RPATH=\$ORIGIN"
         -DTRANSCRIBE_BUILD_SHARED=ON
         -DTRANSCRIBE_INSTALL=ON
@@ -295,7 +299,7 @@ install(PROGRAMS org.kde.plasma.keyboard.custom.desktop DESTINATION ${KDE_INSTAL
 
 # The transcribe.cpp libraries (libtranscribe and the ggml it carries) belong
 # to the keyboard: they are installed next to the binary.
-install(DIRECTORY ${_transcribe_cpp_install}/lib/
+install(DIRECTORY ${_transcribe_cpp_install}/${KDE_INSTALL_LIBDIR}/
     DESTINATION ${KDE_INSTALL_LIBDIR}
     FILES_MATCHING
     PATTERN "libtranscribe.so*"
