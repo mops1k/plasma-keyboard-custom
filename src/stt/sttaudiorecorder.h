@@ -49,6 +49,21 @@ public:
     /*! Stops recording and returns the recorded audio as 16 kHz mono samples. */
     QVector<float> stop();
 
+    /**
+     * Drops the silence before and after the speech from \a samples.
+     *
+     * A recording starts when the microphone key is pressed and stops when it
+     * is pressed again, so it usually carries a pause at both ends. The engines
+     * do not need it, and a phrase is recognised better without it.
+     *
+     * The level is measured in windows of 20 ms; the first and the last window
+     * that reach a fraction of the loudest window are kept, plus a short margin
+     * so the first and the last sound are not cut off. A recording that is
+     * silent from end to end gives an empty result: there is nothing to
+     * recognise.
+     */
+    static QVector<float> trimSilence(const QVector<float> &samples);
+
     /*! Stops recording and throws the recorded audio away. */
     void cancel();
 

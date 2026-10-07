@@ -9,6 +9,8 @@
 #include <QTest>
 #include <QVector>
 
+#include <cmath>
+
 #include "gigaamengine.h"
 #include "parakeetengine.h"
 #include "sttaudiorecorder.h"
@@ -194,6 +196,31 @@ private Q_SLOTS:
         QVERIFY2(error.isEmpty(), qPrintable(error));
         qInfo() << "vosk recognised:" << text;
         QVERIFY(!text.trimmed().isEmpty());
+    }
+
+    void silenceTrimming()
+    {
+        constexpr int SampleRate = 16000;
+        constexpr double Pi = 3.14159265358979323846;
+        const int halfSecond = SampleRate / 2;
+
+        // Half a second of silence, half a second of a tone, half a second of
+        // silence: the shape a recording has when the microphone key is pressed
+        // a moment before and after the phrase.
+        QVector<float> samples(3 * halfSecond, 0.0f);
+        for (int i = 0; i < halfSecond; ++i) {
+            samples[halfSecond + i] = 0.5f * float(std::sin(2.0 * Pi * 440.0 * i / SampleRate));
+        }
+
+        const QVector<float> trimmed = SttAudioRecorder::trimSilence(samples);
+        // The tone is kept, the silence around it is dropped except for the
+        // margin of 100 ms on both sides.
+        QCOMPARE(trimmed.size(), halfSecond + 2 * SampleRate / 10);
+
+        // A recording that is silent from end to end has nothing to recognise.
+        const QVector<float> silent(halfSecond, 0.0f);
+        QVERIFY(SttAudioRecorder::trimSilence(silent).isEmpty());
+        QVERIFY(SttAudioRecorder::trimSilence(QVector<float>()).isEmpty());
     }
 
     void gigaamTranscribes()
