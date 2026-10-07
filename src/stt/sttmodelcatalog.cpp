@@ -6,6 +6,8 @@
 
 #include "sttmodelcatalog.h"
 
+#include "plasmakeyboardsettings.h"
+
 #include <KLocalizedString>
 #include <QDir>
 #include <QFile>
@@ -24,6 +26,33 @@ namespace PlasmaKeyboardStt
 namespace
 {
 constexpr auto CatalogResource = ":/stt/sttmodelcatalog.json";
+
+//! The model chosen for each engine is kept in the settings as "engine=path"
+//! lines, so a new engine does not need a setting of its own.
+QString chosenPath(const QString &engine, const QString &configured)
+{
+    const QString prefix = engine + QLatin1Char('=');
+    const QStringList lines = configured.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+        if (line.startsWith(prefix)) {
+            return line.mid(prefix.size());
+        }
+    }
+    return QString();
+}
+
+QString withChosenPath(const QString &engine, const QString &path, const QString &configured)
+{
+    const QString prefix = engine + QLatin1Char('=');
+    QStringList lines = configured.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    lines.removeIf([&prefix](const QString &line) {
+        return line.startsWith(prefix);
+    });
+    if (!path.isEmpty()) {
+        lines.append(prefix + path);
+    }
+    return lines.join(QLatin1Char('\n'));
+}
 }
 
 SttModelCatalog::SttModelCatalog(QObject *parent)
@@ -150,6 +179,39 @@ QString SttModelCatalog::firstInstalledModelPath(const QString &engine)
         }
     }
     return QString();
+}
+
+QString SttModelCatalog::activeModelPath(const QString &engine)
+{
+    // The model the user picked wins, but only while it is still installed: a
+    // model that was removed (or a path from an older version) falls back to
+    // the first installed model of the engine instead of leaving the engine
+    // without a model.
+    const QString chosen = chosenPath(engine, PlasmaKeyboardSettings::self()->sttModelPaths());
+    if (isInstalledPathForEngine(engine, chosen)) {
+        return chosen;
+    }
+    return firstInstalledModelPath(engine);
+}
+
+void SttModelCatalog::setActiveModelPath(const QString &engine, const QString &path)
+{
+    PlasmaKeyboardSettings::self()->setSttModelPaths(withChosenPath(engine, path, PlasmaKeyboardSettings::self()->sttModelPaths()));
+    PlasmaKeyboardSettings::self()->save();
+}
+
+bool SttModelCatalog::isInstalledPathForEngine(const QString &engine, const QString &path)
+{
+    if (path.isEmpty()) {
+        return false;
+    }
+    const SttModelCatalog *catalog = instance();
+    for (const SttModelEntry &entry : catalog->modelsForEngine(engine)) {
+        if (installedPath(entry) == path) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool SttModelCatalog::remove(const SttModelEntry &entry, QString *error)

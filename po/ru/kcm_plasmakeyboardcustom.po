@@ -730,6 +730,14 @@ msgid "installed"
 msgstr "установлена"
 
 #: ui/SttSettingsPage.qml
+msgid "in use"
+msgstr "используется"
+
+#: ui/SttSettingsPage.qml
+msgid "Use"
+msgstr "Использовать"
+
+#: ui/SttSettingsPage.qml
 msgid "Cancel"
 msgstr "Отмена"
 

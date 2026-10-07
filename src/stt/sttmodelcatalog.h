@@ -78,6 +78,19 @@ public:
     /*! The installed model of \a engine, empty when there is none. */
     static QString firstInstalledModelPath(const QString &engine);
 
+    /**
+     * Path of the model \a engine should use: the model chosen for it in the
+     * settings when it is installed, otherwise the first model installed for
+     * the engine. Empty when the engine has no installed model at all.
+     */
+    static QString activeModelPath(const QString &engine);
+
+    /*! Remembers \a path as the model of \a engine; an empty value forgets it. */
+    static void setActiveModelPath(const QString &engine, const QString &path);
+
+    /*! Whether \a path is the installed path of one of the models of \a engine. */
+    static bool isInstalledPathForEngine(const QString &engine, const QString &path);
+
     /*! Removes an installed model. Returns false and sets \a error on failure. */
     bool remove(const SttModelEntry &entry, QString *error);
 

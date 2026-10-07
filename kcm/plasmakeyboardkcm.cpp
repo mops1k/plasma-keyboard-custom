@@ -63,12 +63,8 @@ PlasmaKeyboardKcm::PlasmaKeyboardKcm(QObject *parent, const KPluginMetaData &met
         Q_EMIT sttModelsChanged();
     });
     connect(m_sttDownloader, &PlasmaKeyboardStt::SttModelDownloader::errorChanged, this, &PlasmaKeyboardKcm::sttDownloadErrorChanged);
-    connect(m_sttDownloader, &PlasmaKeyboardStt::SttModelDownloader::finished, this, [this](const QString &, bool ok, const QString &) {
+    connect(m_sttDownloader, &PlasmaKeyboardStt::SttModelDownloader::finished, this, [this](const QString &, bool, const QString &) {
         Q_EMIT sttModelsChanged();
-        if (ok) {
-            // A model that just arrived may be the one the keyboard will use.
-            Q_EMIT sttModelPathChanged();
-        }
     });
     connect(PlasmaKeyboardStt::SttModelCatalog::instance(), &PlasmaKeyboardStt::SttModelCatalog::changed, this, &PlasmaKeyboardKcm::sttModelsChanged);
 
@@ -698,7 +694,9 @@ void PlasmaKeyboardKcm::load()
 
     setSttEnabled(PlasmaKeyboardSettings::self()->sttEnabled());
     setSttEngine(PlasmaKeyboardSettings::self()->sttEngine());
-    setSttModelPath(PlasmaKeyboardSettings::self()->sttModelPath());
+    // setSttEngine() loads the model of the engine it switches to, but it does
+    // nothing when the engine did not change, so the model is read here as well.
+    m_sttModelPath = PlasmaKeyboardStt::SttModelCatalog::activeModelPath(m_sttEngine);
     setSttLanguageMode(PlasmaKeyboardSettings::self()->sttLanguageMode());
     setSttLanguage(PlasmaKeyboardSettings::self()->sttLanguage());
     setSttInputDevice(PlasmaKeyboardSettings::self()->sttInputDevice());
@@ -739,7 +737,9 @@ void PlasmaKeyboardKcm::save()
     PlasmaKeyboardSettings::self()->setPredictiveTypoCorrectionEnabled(m_predictiveTypoCorrectionEnabled);
     PlasmaKeyboardSettings::self()->setSttEnabled(m_sttEnabled);
     PlasmaKeyboardSettings::self()->setSttEngine(m_sttEngine);
-    PlasmaKeyboardSettings::self()->setSttModelPath(m_sttModelPath);
+    // The chosen model of the engine: a model that was removed meanwhile falls
+    // back to another installed one.
+    PlasmaKeyboardStt::SttModelCatalog::setActiveModelPath(m_sttEngine, m_sttModelPath);
     PlasmaKeyboardSettings::self()->setSttLanguageMode(m_sttLanguageMode);
     PlasmaKeyboardSettings::self()->setSttLanguage(m_sttLanguage);
     PlasmaKeyboardSettings::self()->setSttInputDevice(m_sttInputDevice);
@@ -774,24 +774,11 @@ void PlasmaKeyboardKcm::setSttEngine(const QString &engine)
         return;
     }
     m_sttEngine = engine;
+    // Every engine keeps its own model: show the one this engine used.
+    m_sttModelPath = PlasmaKeyboardStt::SttModelCatalog::activeModelPath(m_sttEngine);
     setNeedsSave(true);
     Q_EMIT sttEngineChanged();
     Q_EMIT sttModelsChanged();
-}
-
-QString PlasmaKeyboardKcm::sttModelPath() const
-{
-    return m_sttModelPath;
-}
-
-void PlasmaKeyboardKcm::setSttModelPath(const QString &path)
-{
-    if (path == m_sttModelPath) {
-        return;
-    }
-    m_sttModelPath = path;
-    setNeedsSave(true);
-    Q_EMIT sttModelPathChanged();
 }
 
 QString PlasmaKeyboardKcm::sttLanguageMode() const
@@ -846,6 +833,9 @@ QVariantList PlasmaKeyboardKcm::sttModels() const
     for (const PlasmaKeyboardStt::SttModelEntry &entry : entries) {
         const QString path = PlasmaKeyboardStt::SttModelCatalog::installedPath(entry);
         const bool busy = m_sttDownloader->isBusy() && m_sttDownloader->modelId() == entry.id;
+        // The model the engine uses right now: the one picked for it, or the
+        // first installed one when nothing was picked.
+        const bool active = !path.isEmpty() && path == m_sttModelPath;
 
         QVariantMap model;
         model.insert(QStringLiteral("id"), entry.id);
@@ -856,6 +846,7 @@ QVariantList PlasmaKeyboardKcm::sttModels() const
         model.insert(QStringLiteral("sizeText"), QLocale().formattedDataSize(entry.size));
         model.insert(QStringLiteral("installed"), !path.isEmpty());
         model.insert(QStringLiteral("path"), path);
+        model.insert(QStringLiteral("active"), active);
         model.insert(QStringLiteral("busy"), busy);
         model.insert(QStringLiteral("progress"), busy ? m_sttDownloader->progress() : 0.0);
         result.append(model);
@@ -911,18 +902,41 @@ void PlasmaKeyboardKcm::cancelSttDownload()
     m_sttDownloader->cancel();
 }
 
+void PlasmaKeyboardKcm::setActiveSttModel(const QString &id)
+{
+    const PlasmaKeyboardStt::SttModelEntry entry = PlasmaKeyboardStt::SttModelCatalog::instance()->entry(id);
+    const QString path = PlasmaKeyboardStt::SttModelCatalog::installedPath(entry);
+    if (entry.id.isEmpty() || path.isEmpty()) {
+        return;
+    }
+    // Like every other setting the choice is applied with the "Apply" button.
+    m_sttModelPath = path;
+    setNeedsSave(true);
+    Q_EMIT sttModelsChanged();
+}
+
 QString PlasmaKeyboardKcm::removeSttModel(const QString &id)
 {
     const PlasmaKeyboardStt::SttModelEntry entry = PlasmaKeyboardStt::SttModelCatalog::instance()->entry(id);
     if (entry.id.isEmpty()) {
         return i18n("Unknown model.");
     }
+    // What the engine used before the model is gone: a choice that points at a
+    // removed model would leave the engine without one.
+    const QString path = PlasmaKeyboardStt::SttModelCatalog::installedPath(entry);
+    const bool wasActive = !path.isEmpty() && path == m_sttModelPath;
+
     QString error;
     if (!PlasmaKeyboardStt::SttModelCatalog::instance()->remove(entry, &error)) {
         return error;
     }
+    if (wasActive) {
+        // Fall back to another installed model of the same engine, so the
+        // engine keeps working after the removal.
+        m_sttModelPath = PlasmaKeyboardStt::SttModelCatalog::activeModelPath(entry.engine);
+        setNeedsSave(true);
+    }
     Q_EMIT sttModelsChanged();
-    Q_EMIT sttModelPathChanged();
     return QString();
 }
 

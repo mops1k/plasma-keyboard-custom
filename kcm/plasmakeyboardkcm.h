@@ -61,7 +61,6 @@ class PlasmaKeyboardKcm : public KQuickManagedConfigModule
                    predictiveTypoCorrectionEnabledChanged)
     Q_PROPERTY(bool sttEnabled READ sttEnabled WRITE setSttEnabled NOTIFY sttEnabledChanged)
     Q_PROPERTY(QString sttEngine READ sttEngine WRITE setSttEngine NOTIFY sttEngineChanged)
-    Q_PROPERTY(QString sttModelPath READ sttModelPath WRITE setSttModelPath NOTIFY sttModelPathChanged)
     Q_PROPERTY(QString sttLanguageMode READ sttLanguageMode WRITE setSttLanguageMode NOTIFY sttLanguageModeChanged)
     Q_PROPERTY(QString sttLanguage READ sttLanguage WRITE setSttLanguage NOTIFY sttLanguageChanged)
     Q_PROPERTY(QString sttInputDevice READ sttInputDevice WRITE setSttInputDevice NOTIFY sttInputDeviceChanged)
@@ -189,9 +188,6 @@ public:
     QString sttEngine() const;
     void setSttEngine(const QString &engine);
 
-    QString sttModelPath() const;
-    void setSttModelPath(const QString &path);
-
     QString sttLanguageMode() const;
     void setSttLanguageMode(const QString &mode);
 
@@ -214,6 +210,9 @@ public:
 
     //! Downloads a model from the catalog; the list follows the progress.
     Q_INVOKABLE void downloadSttModel(const QString &id);
+
+    //! Makes the installed model \a id the one its engine uses.
+    Q_INVOKABLE void setActiveSttModel(const QString &id);
 
     //! Stops the download that is running.
     Q_INVOKABLE void cancelSttDownload();
@@ -268,7 +267,6 @@ Q_SIGNALS:
     void predictiveTypoCorrectionEnabledChanged();
     void sttEnabledChanged();
     void sttEngineChanged();
-    void sttModelPathChanged();
     void sttLanguageModeChanged();
     void sttLanguageChanged();
     void sttInputDeviceChanged();

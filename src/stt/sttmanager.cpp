@@ -151,11 +151,9 @@ QString SttManager::engineName() const
 
 QString SttManager::modelPath() const
 {
-    const QString configured = PlasmaKeyboardSettings::self()->sttModelPath();
-    if (!configured.isEmpty()) {
-        return configured;
-    }
-    return SttModelCatalog::firstInstalledModelPath(engineId());
+    // The model the user picked for the engine; when it is gone, the first
+    // installed model of the engine is used instead.
+    return SttModelCatalog::activeModelPath(engineId());
 }
 
 void SttManager::setModelPath(const QString &modelPath)
@@ -163,7 +161,7 @@ void SttManager::setModelPath(const QString &modelPath)
     if (this->modelPath() == modelPath) {
         return;
     }
-    PlasmaKeyboardSettings::self()->setSttModelPath(modelPath);
+    SttModelCatalog::setActiveModelPath(engineId(), modelPath);
     m_modelDirty = true;
     Q_EMIT modelPathChanged();
     Q_EMIT stateChanged();

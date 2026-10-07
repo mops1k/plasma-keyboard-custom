@@ -160,11 +160,11 @@
             <default>false</default>
         </entry>
         <entry key="sttEngine" type="String">
-            <label>Speech recognition engine: parakeet, whisper or vosk.</label>
+            <label>Speech recognition engine: parakeet, whisper, gigaam or vosk.</label>
             <default>parakeet</default>
         </entry>
-        <entry key="sttModelPath" type="String">
-            <label>Model used by the speech recognition. An empty value uses the model downloaded into the user's data directory.</label>
+        <entry key="sttModelPaths" type="String">
+            <label>Model used by each speech recognition engine, one "engine=path" pair per line. An engine without a pair uses the first model installed for it.</label>
             <default></default>
         </entry>
         <entry key="sttLanguageMode" type="String">
