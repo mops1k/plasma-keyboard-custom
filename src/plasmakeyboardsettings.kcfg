@@ -159,6 +159,10 @@
             <label>Whether dragging across the letter keys types the word the path spells.</label>
             <default>true</default>
         </entry>
+        <entry key="swipeLearningEnabled" type="Bool">
+            <label>Whether the swipe typing remembers the words that are typed and prefers them later.</label>
+            <default>true</default>
+        </entry>
         <entry key="sttEnabled" type="Bool">
             <label>Whether voice input (local speech recognition) is available on the keyboard.</label>
             <default>false</default>

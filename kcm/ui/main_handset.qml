@@ -366,6 +366,19 @@ KCM.SimpleKCM {
                 }
             }
 
+            FormCard.FormSwitchDelegate {
+                id: swipeLearningCheckbox
+                text: i18n("Remember typed words")
+                description: i18n("Prefer the words typed with swipe typing; passwords are never remembered")
+                enabled: swipeTypingCheckbox.checked
+
+                checked: kcm.swipeLearningEnabled
+                onCheckedChanged: {
+                    kcm.swipeLearningEnabled = checked;
+                    checked = Qt.binding(() => kcm.swipeLearningEnabled)
+                }
+            }
+
             FormCard.FormDelegateSeparator {}
 
             FormCard.FormSpinBoxDelegate {

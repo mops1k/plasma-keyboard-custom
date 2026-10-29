@@ -101,6 +101,12 @@ class InputListenerItem : public QQuickItem
     Q_PROPERTY(ClipboardHistory *clipboardHistory READ clipboardHistory CONSTANT)
 
     /**
+     * Whether the focused field is a password or asks for sensitive data, so
+     * the keyboard must not remember what is typed into it.
+     */
+    Q_PROPERTY(bool sensitiveInput READ sensitiveInput)
+
+    /**
      * The word being typed: the letters before the cursor, together with the
      * hyphens and apostrophes inside them («что-то», «don't»). Empty when the
      * field is not being typed into or the cursor is not after a word.
@@ -148,6 +154,8 @@ public:
      * predictions.
      */
     QString predictionContext() const;
+
+    bool sensitiveInput() const;
 
     /**
      * Replaces the word being typed with @p word, the way a suggestion is
@@ -231,6 +239,9 @@ private:
     //! The text (word and space) the last swipe inserted, so that one of its
     //! alternatives can replace it.
     QString m_committedSwipe;
+
+    //! Whether the focused field is a password or asks for sensitive data.
+    mutable bool m_sensitiveInput = false;
 
     //! True after the keyboard was hidden (by the user or by the system) and
     //! until the next input activation. A focused text field keeps sending

@@ -309,6 +309,19 @@ KCM.SimpleKCM {
         }
 
         Bigscreen.SwitchDelegate {
+            id: swipeLearningButton
+            text: i18n("Remember typed words")
+            enabled: swipeTypingButton.checked
+            KeyNavigation.up: swipeTypingButton
+
+            checked: kcm.swipeLearningEnabled
+            onCheckedChanged: {
+                kcm.swipeLearningEnabled = checked;
+                checked = Qt.binding(() => kcm.swipeLearningEnabled);
+            }
+        }
+
+        Bigscreen.SwitchDelegate {
             id: predictiveNextWordButton
             text: i18n("Next word")
             KeyNavigation.up: predictiveTextButton

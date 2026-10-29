@@ -1035,6 +1035,9 @@ InputPanelWindow {
                             // An alternative of the last swipe: replace the word
                             // it inserted instead of the word being typed.
                             thing.replaceSwipeWord(rowItems[column].text);
+                            if (PlasmaKeyboardSettings.swipeLearningEnabled && !thing.sensitiveInput) {
+                                swipeController.learnWord(rowItems[column].text, inputPanel.InputContext.locale);
+                            }
                             root.swipeAlternatives = [];
                             root.updatePredictions();
                         } else {
@@ -1784,6 +1787,9 @@ InputPanelWindow {
             // Заменяет начатое слово (если оно есть) и добавляет пробел; запоминает
             // вставленное, чтобы альтернатива могла его заменить.
             thing.commitSwipeWord(word);
+            if (PlasmaKeyboardSettings.swipeLearningEnabled && !thing.sensitiveInput) {
+                swipeController.learnWord(word, locale);
+            }
             root.swipeAlternatives = alternatives;
             root.updatePredictions();
         }

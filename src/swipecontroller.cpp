@@ -6,6 +6,7 @@
 
 #include "swipecontroller.h"
 
+#include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
@@ -13,9 +14,13 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLoggingCategory>
+#include <QSaveFile>
 #include <QStandardPaths>
+#include <QTimer>
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <vector>
 
 #include "swipekb/language_engine.hpp"
@@ -37,7 +42,15 @@ QString installedPath(const QString &fileName)
 
 SwipeController::SwipeController(QObject *parent)
     : QObject(parent)
+    , m_saveTimer(new QTimer(this))
 {
+    m_saveTimer->setSingleShot(true);
+    m_saveTimer->setInterval(2000);
+    connect(m_saveTimer, &QTimer::timeout, this, [this] {
+        for (auto it = m_learned.cbegin(); it != m_learned.cend(); ++it) {
+            saveLearned(it.key());
+        }
+    });
 }
 
 SwipeController::~SwipeController() = default;
@@ -98,6 +111,8 @@ swipekb::LanguageEngine *SwipeController::engineFor(const QString &locale)
         qCWarning(lcSwipe) << "cannot initialise the swipe engine for" << language << dictionary;
         return nullptr;
     }
+    loadLearned(language);
+    engine->setLearnedWords(learnedWordsFor(language));
     qCDebug(lcSwipe) << "swipe engine ready for" << language << "mode" << engine->mode() << "in" << timer.elapsed() << "ms";
 
     m_engines.insert(language, engine);
@@ -198,4 +213,117 @@ QStringList SwipeController::recognize(const QString &locale, const QVariantList
 void SwipeController::reset()
 {
     m_engines.clear();
+}
+
+QString SwipeController::learnedPath(const QString &language)
+{
+    const QString directory = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/plasma-keyboard-custom/swipe");
+    return directory + QStringLiteral("/learned-") + language + QStringLiteral(".json");
+}
+
+void SwipeController::loadLearned(const QString &language)
+{
+    if (m_learned.contains(language)) {
+        return;
+    }
+
+    QHash<QString, int> words;
+    QFile file(learnedPath(language));
+    if (file.open(QIODevice::ReadOnly)) {
+        const QJsonObject stored = QJsonDocument::fromJson(file.readAll()).object().value(QStringLiteral("words")).toObject();
+        for (auto it = stored.begin(); it != stored.end(); ++it) {
+            const int count = it.value().toInt();
+            if (count > 0) {
+                words.insert(it.key(), count);
+            }
+        }
+        qCDebug(lcSwipe) << "learned words for" << language << words.size();
+    }
+    m_learned.insert(language, words);
+}
+
+void SwipeController::saveLearned(const QString &language)
+{
+    const QString path = learnedPath(language);
+    QDir().mkpath(QFileInfo(path).absolutePath());
+
+    QJsonObject words;
+    const auto known = m_learned.constFind(language);
+    if (known != m_learned.constEnd()) {
+        for (auto it = known->begin(); it != known->end(); ++it) {
+            words.insert(it.key(), it.value());
+        }
+    }
+
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qCWarning(lcSwipe) << "cannot write the learned words" << path;
+        return;
+    }
+    file.write(QJsonDocument(QJsonObject{{QStringLiteral("version"), 1}, {QStringLiteral("words"), words}}).toJson(QJsonDocument::Compact));
+    if (file.commit()) {
+        // The words are personal: keep the file readable only by its owner.
+        QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    }
+}
+
+std::vector<std::pair<std::string, int>> SwipeController::learnedWordsFor(const QString &language) const
+{
+    std::vector<std::pair<std::string, int>> words;
+    const auto known = m_learned.constFind(language);
+    if (known == m_learned.constEnd()) {
+        return words;
+    }
+    words.reserve(size_t(known->size()));
+    for (auto it = known->begin(); it != known->end(); ++it) {
+        // A typed word is worth more than a rare word of the list from the
+        // first use, and grows with every use, up to the top of the scale.
+        const int frequency = std::clamp(int(80 + 25 * std::log2(it.value() + 1)), 80, 255);
+        words.emplace_back(it.key().toStdString(), frequency);
+    }
+    return words;
+}
+
+void SwipeController::learnWord(const QString &word, const QString &locale)
+{
+    const QString language = languageOf(locale);
+    if (language.isEmpty() || word.isEmpty()) {
+        return;
+    }
+
+    // Only letters: the engine rejects anything else, and punctuation would
+    // make one word of «слово,» and «слово».
+    QString cleaned;
+    cleaned.reserve(word.size());
+    for (const QChar character : word.toLower()) {
+        if (character.isLetter()) {
+            cleaned.append(character);
+        }
+    }
+    if (cleaned.isEmpty()) {
+        return;
+    }
+
+    loadLearned(language);
+    QHash<QString, int> &words = m_learned[language];
+    words.insert(cleaned, std::min(words.value(cleaned) + 1, 255));
+
+    if (swipekb::LanguageEngine *engine = engineFor(locale)) {
+        engine->setLearnedWords(learnedWordsFor(language));
+    }
+    // Write once the person stops typing rather than on every word.
+    m_saveTimer->start();
+}
+
+void SwipeController::clearLearnedWords(const QString &locale)
+{
+    const QString language = languageOf(locale);
+    if (language.isEmpty()) {
+        return;
+    }
+    m_learned.remove(language);
+    QFile::remove(learnedPath(language));
+    if (swipekb::LanguageEngine *engine = engineFor(locale)) {
+        engine->setLearnedWords({});
+    }
 }

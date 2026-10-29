@@ -12,7 +12,13 @@
 #include <QVariantList>
 
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include <qqmlintegration.h>
+
+class QTimer;
 
 namespace swipekb
 {
@@ -69,11 +75,34 @@ public:
      */
     Q_INVOKABLE void reset();
 
+    /**
+     * Remembers that @p word was typed, so that the same words are preferred
+     * later. Only letters are kept; the words are stored per language in
+     * <datadir>/plasma-keyboard-custom/swipe/learned-<lang>.json.
+     *
+     * The caller decides whether the field may be remembered at all (password
+     * fields are not); this method does not look at the focused field.
+     */
+    Q_INVOKABLE void learnWord(const QString &word, const QString &locale);
+
+    /**
+     * Forgets the words learned for the language of @p locale.
+     */
+    Q_INVOKABLE void clearLearnedWords(const QString &locale);
+
 private:
     swipekb::LanguageEngine *engineFor(const QString &locale);
 
     static QString languageOf(const QString &locale);
     static QString dataFile(const QString &name);
+    static QString learnedPath(const QString &language);
+
+    void loadLearned(const QString &language);
+    void saveLearned(const QString &language);
+    std::vector<std::pair<std::string, int>> learnedWordsFor(const QString &language) const;
 
     QHash<QString, std::shared_ptr<swipekb::LanguageEngine>> m_engines;
+    //! The words that were typed, with how many times, per language.
+    QHash<QString, QHash<QString, int>> m_learned;
+    QTimer *m_saveTimer = nullptr;
 };

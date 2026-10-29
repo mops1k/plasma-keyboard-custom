@@ -421,6 +421,11 @@ QString InputListenerItem::predictionContext() const
     return previousWordBeforeCursor(textBeforeCursor());
 }
 
+bool InputListenerItem::sensitiveInput() const
+{
+    return m_sensitiveInput;
+}
+
 void InputListenerItem::updatePredictionWords()
 {
     const QString prefix = predictionPrefix();
@@ -553,6 +558,12 @@ QVariant InputListenerItem::inputMethodQuery(Qt::InputMethodQuery query) const
         if (imHints & InputPlugin::content_hint_sensitive_data) {
             qtHints |= Qt::ImhSensitiveData;
         }
+        // The personal words of the swipe engine are not learned from a field
+        // that asks not to be remembered.
+        const bool sensitive =
+            (imHints & (InputPlugin::content_hint_password | InputPlugin::content_hint_hidden_text | InputPlugin::content_hint_sensitive_data))
+            || m_input.contentPurpose() == InputPlugin::content_purpose_password;
+        m_sensitiveInput = sensitive;
         if (imHints & InputPlugin::content_hint_latin) {
             qtHints |= Qt::ImhPreferLatin;
         }

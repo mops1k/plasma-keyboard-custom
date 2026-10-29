@@ -670,6 +670,23 @@ void PlasmaKeyboardKcm::setSwipeTypingEnabled(bool enabled)
     setNeedsSave(true);
 }
 
+bool PlasmaKeyboardKcm::swipeLearningEnabled() const
+{
+    return m_swipeLearningEnabled;
+}
+
+void PlasmaKeyboardKcm::setSwipeLearningEnabled(bool enabled)
+{
+    if (enabled == m_swipeLearningEnabled) {
+        return;
+    }
+
+    m_swipeLearningEnabled = enabled;
+    Q_EMIT swipeLearningEnabledChanged();
+
+    setNeedsSave(true);
+}
+
 bool PlasmaKeyboardKcm::isSaveNeeded() const
 {
     return m_saveNeeded;
@@ -709,6 +726,7 @@ void PlasmaKeyboardKcm::load()
     setPredictiveNextWordEnabled(PlasmaKeyboardSettings::self()->predictiveNextWordEnabled());
     setPredictiveTypoCorrectionEnabled(PlasmaKeyboardSettings::self()->predictiveTypoCorrectionEnabled());
     setSwipeTypingEnabled(PlasmaKeyboardSettings::self()->swipeTypingEnabled());
+    setSwipeLearningEnabled(PlasmaKeyboardSettings::self()->swipeLearningEnabled());
 
     setSttEnabled(PlasmaKeyboardSettings::self()->sttEnabled());
     setSttEngine(PlasmaKeyboardSettings::self()->sttEngine());
@@ -754,6 +772,7 @@ void PlasmaKeyboardKcm::save()
     PlasmaKeyboardSettings::self()->setPredictiveNextWordEnabled(m_predictiveNextWordEnabled);
     PlasmaKeyboardSettings::self()->setPredictiveTypoCorrectionEnabled(m_predictiveTypoCorrectionEnabled);
     PlasmaKeyboardSettings::self()->setSwipeTypingEnabled(m_swipeTypingEnabled);
+    PlasmaKeyboardSettings::self()->setSwipeLearningEnabled(m_swipeLearningEnabled);
     PlasmaKeyboardSettings::self()->setSttEnabled(m_sttEnabled);
     PlasmaKeyboardSettings::self()->setSttEngine(m_sttEngine);
     // The chosen model of the engine: a model that was removed meanwhile falls
