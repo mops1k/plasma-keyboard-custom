@@ -138,6 +138,8 @@ target_sources(plasma-keyboard-custom PRIVATE
     restartwatcher.h
     settingsreloader.cpp
     settingsreloader.h
+    swipecontroller.cpp
+    swipecontroller.h
     touchholdwatcher.cpp
     inputplugin.h
     theme/thememanager.cpp
@@ -242,6 +244,10 @@ ecm_target_qml_sources(plasma-keyboard-custom SOURCES
 )
 ecm_finalize_qml_module(plasma-keyboard-custom)
 
+# The vendored MIT swipe engine (src/swipekb): swipe recognition over the word
+# lists of the predictive text input. See src/swipekb/README.md.
+add_subdirectory(swipekb)
+
 kconfig_add_kcfg_files(plasma-keyboard-custom GENERATE_MOC plasmakeyboardsettings.kcfgc)
 
 target_include_directories(plasma-keyboard-custom PRIVATE
@@ -274,6 +280,7 @@ target_link_libraries(plasma-keyboard-custom
     Qt::VirtualKeyboard
     parakeet
     whisper
+    swipekb_engine
     Qt::WaylandClient
     Qt::WaylandClientPrivate
     Wayland::Client

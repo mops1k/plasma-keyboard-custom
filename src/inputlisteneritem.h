@@ -156,6 +156,20 @@ public:
     Q_INVOKABLE void applyPrediction(const QString &word);
 
     /**
+     * Types the word of a swipe gesture: replaces the word being typed (if any)
+     * with @p word and adds the space after it, and remembers what was inserted
+     * so that an alternative can replace it again.
+     */
+    Q_INVOKABLE void commitSwipeWord(const QString &word);
+
+    /**
+     * Replaces the word the last swipe inserted with @p word, keeping the space
+     * after it. Does nothing when the text no longer ends with that word (the
+     * person typed something else in between).
+     */
+    Q_INVOKABLE void replaceSwipeWord(const QString &word);
+
+    /**
      * The alternate characters a key offers, in the form they would be typed.
      *
      * @p alternatives is the effectiveAlternativeKeys of the highlighted key
@@ -213,6 +227,10 @@ private:
 
     //! The word the next-word predictions are currently looked up with.
     QString m_predictionContext;
+
+    //! The text (word and space) the last swipe inserted, so that one of its
+    //! alternatives can replace it.
+    QString m_committedSwipe;
 
     //! True after the keyboard was hidden (by the user or by the system) and
     //! until the next input activation. A focused text field keeps sending

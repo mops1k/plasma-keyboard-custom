@@ -155,6 +155,10 @@
             <label>Whether a word that is not the beginning of any known word is offered to be corrected.</label>
             <default>true</default>
         </entry>
+        <entry key="swipeTypingEnabled" type="Bool">
+            <label>Whether dragging across the letter keys types the word the path spells.</label>
+            <default>true</default>
+        </entry>
         <entry key="sttEnabled" type="Bool">
             <label>Whether voice input (local speech recognition) is available on the keyboard.</label>
             <default>false</default>

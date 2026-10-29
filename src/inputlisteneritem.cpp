@@ -462,6 +462,44 @@ void InputListenerItem::applyPrediction(const QString &word)
     inputMethodEvent(&event);
 }
 
+void InputListenerItem::commitSwipeWord(const QString &word)
+{
+    if (word.isEmpty() || !m_input.hasContext()) {
+        return;
+    }
+
+    const QString committed = word + QLatin1Char(' ');
+    const QString prefix = predictionPrefix();
+    if (prefix.isEmpty()) {
+        commitText(committed);
+    } else {
+        QInputMethodEvent event;
+        event.setCommitString(committed, -prefix.size(), prefix.size());
+        inputMethodEvent(&event);
+    }
+    // An alternative offered for this swipe may replace exactly this text.
+    m_committedSwipe = committed;
+}
+
+void InputListenerItem::replaceSwipeWord(const QString &word)
+{
+    if (word.isEmpty() || m_committedSwipe.isEmpty() || !m_input.hasContext()) {
+        return;
+    }
+    // Only replace when the inserted word is still right before the cursor: the
+    // text may have been edited in the field since the swipe.
+    if (!textBeforeCursor().endsWith(m_committedSwipe)) {
+        m_committedSwipe.clear();
+        return;
+    }
+
+    const QString committed = word + QLatin1Char(' ');
+    QInputMethodEvent event;
+    event.setCommitString(committed, -m_committedSwipe.size(), m_committedSwipe.size());
+    inputMethodEvent(&event);
+    m_committedSwipe = committed;
+}
+
 void InputListenerItem::setEngine(QVirtualKeyboardInputEngine *engine)
 {
     // The overlay controller inserts a picked alternate character as a key

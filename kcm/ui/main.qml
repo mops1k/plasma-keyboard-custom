@@ -456,6 +456,19 @@ KCM.AbstractKCM {
             }
 
             SettingsRow {
+                label: i18n("Swipe typing:")
+                description: i18n("Type a word by dragging across its letters")
+
+                QQC2.Switch {
+                    checked: kcm.swipeTypingEnabled
+                    onCheckedChanged: {
+                        kcm.swipeTypingEnabled = checked;
+                        checked = Qt.binding(() => kcm.swipeTypingEnabled);
+                    }
+                }
+            }
+
+            SettingsRow {
                 label: i18n("Suggestions at once:")
                 description: i18n("How many word suggestions are offered at the same time")
                 controlFillWidth: true

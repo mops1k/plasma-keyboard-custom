@@ -59,6 +59,7 @@ class PlasmaKeyboardKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool predictiveNextWordEnabled READ predictiveNextWordEnabled WRITE setPredictiveNextWordEnabled NOTIFY predictiveNextWordEnabledChanged)
     Q_PROPERTY(bool predictiveTypoCorrectionEnabled READ predictiveTypoCorrectionEnabled WRITE setPredictiveTypoCorrectionEnabled NOTIFY
                    predictiveTypoCorrectionEnabledChanged)
+    Q_PROPERTY(bool swipeTypingEnabled READ swipeTypingEnabled WRITE setSwipeTypingEnabled NOTIFY swipeTypingEnabledChanged)
     Q_PROPERTY(bool sttEnabled READ sttEnabled WRITE setSttEnabled NOTIFY sttEnabledChanged)
     Q_PROPERTY(QString sttEngine READ sttEngine WRITE setSttEngine NOTIFY sttEngineChanged)
     Q_PROPERTY(QString sttLanguageMode READ sttLanguageMode WRITE setSttLanguageMode NOTIFY sttLanguageModeChanged)
@@ -181,6 +182,10 @@ public:
     bool predictiveTypoCorrectionEnabled() const;
     void setPredictiveTypoCorrectionEnabled(bool enabled);
 
+    // Swipe (glide) typing: dragging across the letter keys types the word.
+    bool swipeTypingEnabled() const;
+    void setSwipeTypingEnabled(bool enabled);
+
     // Voice input (local speech recognition).
     bool sttEnabled() const;
     void setSttEnabled(bool enabled);
@@ -265,6 +270,7 @@ Q_SIGNALS:
     void predictiveMinPrefixLengthChanged();
     void predictiveNextWordEnabledChanged();
     void predictiveTypoCorrectionEnabledChanged();
+    void swipeTypingEnabledChanged();
     void sttEnabledChanged();
     void sttEngineChanged();
     void sttLanguageModeChanged();
@@ -303,6 +309,7 @@ private:
     int m_predictiveMinPrefixLength = 1;
     bool m_predictiveNextWordEnabled = true;
     bool m_predictiveTypoCorrectionEnabled = true;
+    bool m_swipeTypingEnabled = true;
 
     bool m_sttEnabled = false;
     QString m_sttEngine = QStringLiteral("parakeet");

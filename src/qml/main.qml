@@ -95,6 +95,11 @@ InputPanelWindow {
     //! follow the previous one) and how much of it would be added to the text.
     property var predictions: []
 
+    //! The other words the last swipe may have spelled, best first. They take
+    //! the place of the suggestions above the keyboard until the person types
+    //! something else, and picking one replaces the word the swipe inserted.
+    property var swipeAlternatives: []
+
     //! Whether the voice input mode is on: the keys are covered by one big
     //! microphone button. Only reachable while the voice input is enabled.
     property bool voiceMode: false
@@ -146,6 +151,16 @@ InputPanelWindow {
     //! words that may follow the previous one are offered. The language is the
     //! one the text field asked for.
     function updatePredictions() {
+        // The alternatives of the last swipe come first: they belong to the word
+        // that was just inserted, not to the word being typed.
+        if (swipeAlternatives.length > 0) {
+            predictions = swipeAlternatives.map(word => ({
+                "text": word,
+                "kind": "swipe",
+                "completion": 0
+            }));
+            return;
+        }
         if (!PlasmaKeyboardSettings.predictiveTextEnabled) {
             predictions = [];
             return;
@@ -181,6 +196,10 @@ InputPanelWindow {
     Connections {
         target: thing
         function onPredictionPrefixChanged() {
+            // Typing again makes the alternatives of the last swipe stale.
+            if (thing.predictionPrefix.length > 0) {
+                root.swipeAlternatives = [];
+            }
             root.updatePredictions();
         }
         function onPredictionContextChanged() {
@@ -982,6 +1001,7 @@ InputPanelWindow {
                     return root.predictions.map(item => ({
                                 "text": item.text,
                                 "completion": item.completion,
+                                "kind": item.kind,
                                 "suggestion": true
                             }));
                 }
@@ -1011,7 +1031,15 @@ InputPanelWindow {
             function activate(column) {
                 if (column < rowItems.length) {
                     if (showingSuggestions) {
-                        thing.applyPrediction(rowItems[column].text);
+                        if (rowItems[column].kind === "swipe") {
+                            // An alternative of the last swipe: replace the word
+                            // it inserted instead of the word being typed.
+                            thing.replaceSwipeWord(rowItems[column].text);
+                            root.swipeAlternatives = [];
+                            root.updatePredictions();
+                        } else {
+                            thing.applyPrediction(rowItems[column].text);
+                        }
                     } else {
                         thing.commitText(rowItems[column].text);
                     }
@@ -1579,6 +1607,203 @@ InputPanelWindow {
             externalSelectedIndex: thing.overlayController.alternateSelection
 
             onCharacterSelected: index => thing.overlayController.commitCandidate(index)
+        }
+    }
+
+    // ---- Свайп-печать (glide typing). ----
+    // Слушаем штатную touch-зону Qt Virtual Keyboard, ничего не перехватываем:
+    // тапы и long-press остаются прежними. Жест активируется после выхода за
+    // радиус стартовой клавиши, нажатие этой клавиши отменяется, а на отпускании
+    // путь уходит в C++-движок (src/swipekb) и лучшее слово вставляется в поле.
+    SwipeController {
+        id: swipeController
+    }
+
+    Canvas {
+        id: swipeTrail
+        anchors.fill: parent
+        z: 2000
+        visible: swipeInput.dragging
+        onPaint: {
+            const ctx = getContext("2d");
+            ctx.clearRect(0, 0, width, height);
+            const pts = swipeInput.trailPoints;
+            if (pts.length < 2) {
+                return;
+            }
+            const base = Math.max(10, PlasmaKeyboard.BreezeConstants.scaleHint * 14);
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            for (let i = 1; i < pts.length; i++) {
+                const t = i / pts.length;
+                ctx.beginPath();
+                ctx.lineWidth = base * (0.5 + 0.5 * t);
+                ctx.strokeStyle = Qt.rgba(0.25, 0.6, 1.0, 0.25 + 0.4 * t);
+                ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+                ctx.lineTo(pts[i].x, pts[i].y);
+                ctx.stroke();
+            }
+        }
+    }
+
+    QtObject {
+        id: swipeInput
+
+        property bool dragging: false
+        property var points: []
+        property var trailPoints: []
+        property var startKey: null
+        property var keyMap: []
+        //! The words the last swipe may have spelled, best first.
+        property var alternatives: []
+        property double startTime: 0
+
+        readonly property var letterRe: /^[a-zа-яё]$/
+
+        function buildKeyMap() {
+            const map = [];
+            const keyboard = inputPanel.keyboard;
+            if (!keyboard) {
+                return map;
+            }
+            const stack = [keyboard];
+            while (stack.length > 0) {
+                const item = stack.pop();
+                for (let i = 0; i < item.children.length; i++) {
+                    stack.push(item.children[i]);
+                }
+                // Буквенная клавиша Qt VK: у BaseKey есть key/displayText/functionKey.
+                if (item.key !== undefined && item.displayText !== undefined && item.functionKey === false
+                        && typeof item.text === "string" && letterRe.test(item.text.toLowerCase())) {
+                    const c = item.mapToItem(null, item.width / 2, item.height / 2);
+                    map.push({
+                        "x": c.x,
+                        "y": c.y,
+                        "w": item.width,
+                        "h": item.height,
+                        "r": Math.min(item.width, item.height) / 2,
+                        "letter": item.text.toLowerCase()
+                    });
+                }
+            }
+            return map;
+        }
+
+        function keyAt(x, y) {
+            for (let i = 0; i < keyMap.length; i++) {
+                const k = keyMap[i];
+                if (Math.hypot(x - k.x, y - k.y) <= k.r) {
+                    return k;
+                }
+            }
+            return null;
+        }
+
+        function begin(tp) {
+            keyMap = buildKeyMap();
+            const area = inputPanel.keyboard ? inputPanel.keyboard.keyboardInputArea : null;
+            if (!area || !tp) {
+                return;
+            }
+            const p = area.mapToItem(null, tp.x, tp.y);
+            startKey = keyAt(p.x, p.y);
+            // Язык без построенного словаря или выключенный свайп остаются на тапе.
+            if (startKey && (!PlasmaKeyboardSettings.swipeTypingEnabled
+                             || !swipeController.supports(inputPanel.InputContext.locale))) {
+                startKey = null;
+            }
+            points = [];
+            trailPoints = [];
+            alternatives = [];
+            dragging = false;
+            startTime = Date.now();
+            if (startKey) {
+                points = [{ "x": p.x, "y": p.y, "t": 0 }];
+            }
+        }
+
+        function move(tp) {
+            const area = inputPanel.keyboard ? inputPanel.keyboard.keyboardInputArea : null;
+            if (!area || !tp || !startKey) {
+                return;
+            }
+            const p = area.mapToItem(null, tp.x, tp.y);
+            const now = Date.now() - startTime;
+            if (!dragging) {
+                const traveled = Math.hypot(p.x - startKey.x, p.y - startKey.y);
+                // Порог — радиус клавиши; sloppy tap и long-press остаются ниже.
+                if (traveled <= startKey.r) {
+                    return;
+                }
+                dragging = true;
+                points = [{ "x": startKey.x, "y": startKey.y, "t": 0 }, { "x": p.x, "y": p.y, "t": now }];
+                trailPoints = [];
+                // Клавиша уже получила press: без отмены буква «залипнет».
+                InputContext.inputEngine.virtualKeyCancel();
+                if (typeof area.reset === "function") {
+                    area.reset();
+                }
+                if (PlasmaKeyboardSettings.vibrationEnabled) {
+                    Vibration.vibrate(PlasmaKeyboardSettings.vibrationMs, PlasmaKeyboardSettings.vibrationStrength);
+                }
+            } else {
+                points.push({ "x": p.x, "y": p.y, "t": now });
+            }
+            trailPoints.push({ "x": p.x, "y": p.y });
+            swipeTrail.requestPaint();
+        }
+
+        function end() {
+            if (!dragging) {
+                points = [];
+                startKey = null;
+                return;
+            }
+            const trace = points;
+            dragging = false;
+            points = [];
+            trailPoints = [];
+            startKey = null;
+            swipeTrail.requestPaint();
+
+            if (trace.length < 3) {
+                return;
+            }
+            const locale = inputPanel.InputContext.locale;
+            const context = thing.predictionContext ? [thing.predictionContext] : [];
+            const words = swipeController.recognize(locale, trace, keyMap, context, 5);
+            if (words.length === 0) {
+                console.log("SWIPE no word, locale=" + locale + " points=" + trace.length);
+                return;
+            }
+            let word = words[0];
+            if (InputContext.shiftActive || InputContext.capsLockActive) {
+                word = word[0].toUpperCase() + word.slice(1);
+            }
+            alternatives = words.slice(1, 5);
+            // Заменяет начатое слово (если оно есть) и добавляет пробел; запоминает
+            // вставленное, чтобы альтернатива могла его заменить.
+            thing.commitSwipeWord(word);
+            root.swipeAlternatives = alternatives;
+            root.updatePredictions();
+        }
+    }
+
+    Connections {
+        target: inputPanel.keyboard ? inputPanel.keyboard.keyboardInputArea : null
+        function onPressed(touchPoints) {
+            swipeInput.begin(touchPoints.length > 0 ? touchPoints[0] : null);
+        }
+        function onUpdated(touchPoints) {
+            if (touchPoints.length > 0) {
+                swipeInput.move(touchPoints[0]);
+            }
+        }
+        function onReleased(touchPoints) {
+            swipeInput.end();
+        }
+        function onCanceled(touchPoints) {
+            swipeInput.end();
         }
     }
 
