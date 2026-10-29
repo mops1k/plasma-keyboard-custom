@@ -158,6 +158,13 @@ public:
     bool sensitiveInput() const;
 
     /**
+     * Whether the cursor stands at the beginning of a sentence: the field is
+     * empty or the text before it ends a sentence («. », «! », «? » or a line
+     * break). Used to capitalise a word the keyboard inserts as a whole.
+     */
+    Q_INVOKABLE bool atSentenceStart() const;
+
+    /**
      * Replaces the word being typed with @p word, the way a suggestion is
      * taken. The word carries the case it should be typed in.
      */

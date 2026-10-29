@@ -1786,7 +1786,7 @@ InputPanelWindow {
                 return;
             }
             let word = words[0];
-            if (InputContext.shiftActive || InputContext.capsLockActive) {
+            if (InputContext.shiftActive || InputContext.capsLockActive || thing.atSentenceStart()) {
                 word = word[0].toUpperCase() + word.slice(1);
             }
             alternatives = words.slice(1, 5);

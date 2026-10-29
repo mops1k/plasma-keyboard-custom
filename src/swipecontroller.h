@@ -90,6 +90,16 @@ public:
      */
     Q_INVOKABLE void clearLearnedWords(const QString &locale);
 
+public Q_SLOTS:
+    /**
+     * The same recognition, for scripts and tests over D-Bus
+     * (org.kde.plasma.keyboard.custom /SwipeDebug), from one JSON string:
+     * {"trace": [[x, y, t], ...], "keys": [["letter", x, y, w, h], ...]},
+     * both in the window's pixels, the keys with their top-left corner, as the
+     * engine expects them.
+     */
+    QStringList recognizeJson(const QString &locale, const QString &request);
+
 private:
     swipekb::LanguageEngine *engineFor(const QString &locale);
 

@@ -20,6 +20,7 @@
 #include "prediction/wordatcursor.h"
 
 #include <QLoggingCategory>
+#include <QRegularExpression>
 #include <QTextFormat>
 #include <QTimer>
 
@@ -424,6 +425,17 @@ QString InputListenerItem::predictionContext() const
 bool InputListenerItem::sensitiveInput() const
 {
     return m_sensitiveInput;
+}
+
+bool InputListenerItem::atSentenceStart() const
+{
+    const QString before = textBeforeCursor();
+    if (before.trimmed().isEmpty()) {
+        return true;
+    }
+    // The space after a sentence end may already be inserted by the keyboard.
+    static const QRegularExpression endOfSentence(QStringLiteral("(^|[.!?…]|\\n)[\\s\"'»”’)\\]]*$"));
+    return endOfSentence.match(before).hasMatch();
 }
 
 void InputListenerItem::updatePredictionWords()

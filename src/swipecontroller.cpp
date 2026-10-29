@@ -6,6 +6,7 @@
 
 #include "swipecontroller.h"
 
+#include <QDBusConnection>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -51,6 +52,17 @@ SwipeController::SwipeController(QObject *parent)
             saveLearned(it.key());
         }
     });
+
+    // A small D-Bus hook for scripts and tests: replaying a path without the
+    // keyboard. The object is always reachable through the connection's unique
+    // name; the well-known one may be taken by another instance.
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (bus.isConnected()) {
+        bus.registerObject(QStringLiteral("/SwipeDebug"), this, QDBusConnection::ExportAllSlots);
+        if (!bus.registerService(QStringLiteral("org.kde.plasma.keyboard.custom"))) {
+            qCDebug(lcSwipe) << "D-Bus name org.kde.plasma.keyboard.custom is taken; SwipeDebug is on the unique name";
+        }
+    }
 }
 
 SwipeController::~SwipeController() = default;
@@ -326,4 +338,36 @@ void SwipeController::clearLearnedWords(const QString &locale)
     if (swipekb::LanguageEngine *engine = engineFor(locale)) {
         engine->setLearnedWords({});
     }
+}
+
+QStringList SwipeController::recognizeJson(const QString &locale, const QString &request)
+{
+    const QJsonObject root = QJsonDocument::fromJson(request.toUtf8()).object();
+
+    QVariantList traceList;
+    for (const QJsonValue &point : root.value(QStringLiteral("trace")).toArray()) {
+        const QJsonArray values = point.toArray();
+        if (values.size() != 3) {
+            continue;
+        }
+        traceList.append(QVariantMap{{QStringLiteral("x"), values[0].toDouble()},
+                                     {QStringLiteral("y"), values[1].toDouble()},
+                                     {QStringLiteral("t"), qint64(values[2].toDouble())}});
+    }
+
+    QVariantList keyList;
+    for (const QJsonValue &key : root.value(QStringLiteral("keys")).toArray()) {
+        const QJsonArray values = key.toArray();
+        if (values.size() != 5) {
+            continue;
+        }
+        keyList.append(QVariantMap{{QStringLiteral("letter"), values[0].toString()},
+                                   {QStringLiteral("x"), values[1].toDouble()},
+                                   {QStringLiteral("y"), values[2].toDouble()},
+                                   {QStringLiteral("w"), values[3].toDouble()},
+                                   {QStringLiteral("h"), values[4].toDouble()}});
+    }
+
+    qCDebug(lcSwipe) << "SwipeDebug:" << traceList.size() << "points," << keyList.size() << "keys for" << locale;
+    return recognize(locale, traceList, keyList, {}, 5);
 }
