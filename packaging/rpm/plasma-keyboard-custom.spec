@@ -166,6 +166,9 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/org.kde.plasma.keyboa
 %{_datadir}/metainfo/org.kde.plasma.keyboard.custom.metainfo.xml
 %{_datadir}/config.kcfg/plasmakeyboardcustomsettings.kcfg
 %{_datadir}/plasma/keyboard-custom/
+# The swipe word lists are generated at build time and loaded next to the
+# neural model of the swipe engine.
+%{_datadir}/plasma-keyboard-custom/swipe/
 %{_datadir}/plasma/plasmoids/org.kde.plasma.keyboard.custom.toggle/
 %{_libdir}/qt6/qml/QtQuick/VirtualKeyboard/Styles/PlasmaBreezeCustom/
 %{_libdir}/qt6/qml/org/kde/plasma/keyboard/custom/
