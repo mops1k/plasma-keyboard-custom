@@ -1661,6 +1661,12 @@ InputPanelWindow {
         property var alternatives: []
         property double startTime: 0
 
+        //! Whether a gesture can become a swipe at all: the language has a word
+        //! list, swipe typing is on, and the keys are not covered by voice mode.
+        readonly property bool available: !root.voiceMode
+            && PlasmaKeyboardSettings.swipeTypingEnabled
+            && swipeController.supports(inputPanel.InputContext.locale)
+
         readonly property var letterRe: /^[a-zа-яё]$/
 
         function buildKeyMap() {
@@ -1710,9 +1716,9 @@ InputPanelWindow {
             }
             const p = area.mapToItem(null, tp.x, tp.y);
             startKey = keyAt(p.x, p.y);
-            // Язык без построенного словаря или выключенный свайп остаются на тапе.
-            if (startKey && (!PlasmaKeyboardSettings.swipeTypingEnabled
-                             || !swipeController.supports(inputPanel.InputContext.locale))) {
+            // Язык без построенного словаря, выключенный свайп и голосовая
+            // страница (клавиши под ней не видны) остаются на тапе.
+            if (startKey && !available) {
                 startKey = null;
             }
             points = [];
@@ -1799,6 +1805,12 @@ InputPanelWindow {
         target: inputPanel.keyboard ? inputPanel.keyboard.keyboardInputArea : null
         function onPressed(touchPoints) {
             swipeInput.begin(touchPoints.length > 0 ? touchPoints[0] : null);
+            // In the floating mode the whole panel can be dragged around. A
+            // gesture that starts on a letter is a swipe, not a drag: without
+            // this the window follows the finger and the swipe never happens.
+            if (swipeInput.startKey !== null) {
+                panelDrag.enabled = false;
+            }
         }
         function onUpdated(touchPoints) {
             if (touchPoints.length > 0) {
@@ -1807,9 +1819,11 @@ InputPanelWindow {
         }
         function onReleased(touchPoints) {
             swipeInput.end();
+            panelDrag.enabled = panelWrapper.floating;
         }
         function onCanceled(touchPoints) {
             swipeInput.end();
+            panelDrag.enabled = panelWrapper.floating;
         }
     }
 

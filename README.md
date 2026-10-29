@@ -332,6 +332,9 @@ The settings page in System Settings:
   - the page and its options are translated (the `kcm_plasmakeyboardcustom` translation domain is shipped with the
     package, Russian included) instead of falling back to English,
   - plus the upstream settings (locales, sound, vibration, navigation, diacritics, …).
+- **Swipe typing** (glide typing) in English and Russian: drag across the letters and the word is inserted, with the
+  alternatives above the keyboard and the words you typed remembered (passwords never). The MIT engine lives in
+  `src/swipekb`, the word lists are cut from the predictive lists at build time.
 - **Global shortcut** to show/hide the keyboard (default `Meta+Shift+K`, configurable in
   System Settings → Shortcuts → Plasma Keyboard (custom)).
 - **Build/packaging**: a `PKGBUILD` for Arch-based systems that installs only custom-named files (no file conflicts with
@@ -523,6 +526,27 @@ The *Theme files* row in the same **Appearance** tab manages user themes; errors
 - **Remove theme** is enabled only for user themes (the name of a built-in is greyed out). It asks for confirmation; if the removed theme was the selected one, the selection falls back to `system`. Built-in themes cannot be removed.
 
 A user theme can also be deleted by hand from `~/.local/share/plasma-keyboard/themes/`; a theme that disappears while it is selected also falls back to `system`.
+
+## Swipe typing (glide typing)
+
+Drag a finger across the letters of a word and release: the word is inserted with a space after it, and the other
+words the path may have spelled are offered in the row above the keyboard. Tapping an alternative replaces the word
+that was just inserted; typing or swiping again dismisses them. Taps, long presses for alternate characters and the
+gamepad keep working as before.
+
+- **Languages:** English and Russian. A gesture only starts on a letter key, so the keys around the letters stay
+  ordinary keys. A layout without a word list stays on tapping.
+- **Recognition:** the MIT swipe engine of the [Swipe Keyboard](https://github.com/itsdestin/swipe-keyboard) project
+  is vendored in `src/swipekb`. The word lists are cut at build time from the words of the predictive text input
+  (the same FrequencyWords lists); English also uses the project's MIT neural model, Russian is decoded by geometry
+  over the Russian word list. A word that is not in the list is never returned.
+- **Learning:** words inserted with a swipe, and alternatives picked for them, are remembered with how often they
+  were used in `~/.local/share/plasma-keyboard-custom/swipe/learned-<lang>.json` (readable by its owner only) and
+  rank higher next time. Password and sensitive fields are never learned, and learning can be turned off.
+- **Settings:** the **Swipe typing** and **Remember typed words** switches are on the **Text input** page next to
+  the word suggestions.
+
+The swipe model and its credits are described in `src/swipekb/model/NOTICE.md`.
 
 ## Voice input (local speech recognition)
 
