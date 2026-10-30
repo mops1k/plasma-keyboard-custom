@@ -313,6 +313,11 @@ public:
         // hidden, the gamepad mapping is not restored and the focused window keeps
         // the space reserved for the keyboard.
         connect(window, &QWindow::visibleChanged, this, &KeyboardWindowBridge::syncStubVisibility);
+        // KWin stops reporting the keyboard as visible as soon as the text input
+        // goes away, while the window itself stays mapped when the keyboard is
+        // not hidden on focus loss: the Plasma panel has to follow the window as
+        // well (see KeyboardHotkeyController::updatePanelVisibility()).
+        connect(window, &QWindow::visibleChanged, this, &KeyboardWindowBridge::keyboardWindowVisibleChanged);
         // The keyboard belongs on screen only while it is asked for: Qt Virtual
         // Keyboard maps the window when it shows the panel and unmaps it when it
         // hides it. Mapping it here as well put the keyboard on screen (and made
@@ -402,11 +407,22 @@ public:
         return m_kwinVisible;
     }
 
+    //! Whether the keyboard window itself is mapped. KWin reports the keyboard
+    //! as hidden as soon as the text input goes away, but with
+    //! hideOnInputFocusLoss off the window stays on screen and keeps the space
+    //! it reserves, so the Plasma panel has to follow the window as well (see
+    //! KeyboardHotkeyController::updatePanelVisibility()).
+    bool keyboardWindowVisible() const
+    {
+        return m_keyboard && m_keyboard->isVisible();
+    }
+
     //! The compositor re-reserves the space for the panel on its own: the docked
     //! keyboard asks for it with the layer-shell exclusive zone of its window, so
     //! switching modes only has to re-apply that zone (see applyPanelLayout()).
 Q_SIGNALS:
     void kwinVisibleChanged();
+    void keyboardWindowVisibleChanged();
 
 private:
     //! The panel stub never takes part in the layout: the space for the docked
@@ -542,6 +558,11 @@ public:
                                               this,
                                               SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
 
+        // The visible keyboard window can outlive what KWin reports for it (see
+        // updatePanelVisibility()), so the panel state is re-evaluated as soon
+        // as the window is mapped or unmapped, without waiting for the poll.
+        connect(m_bridge, &KeyboardWindowBridge::keyboardWindowVisibleChanged, this, &KeyboardHotkeyController::updatePanelVisibility);
+
         // The PropertiesChanged signal is not always delivered; poll instead.
         auto *pollTimer = new QTimer(this);
         pollTimer->setInterval(1000);
@@ -601,6 +622,13 @@ public Q_SLOTS:
     void updatePanelVisibility()
     {
         const bool keyboardVisible = kwinVisible();
+        // KWin stops treating the keyboard as shown as soon as the text input
+        // goes away, but with hideOnInputFocusLoss off the visible window stays
+        // mapped and keeps the space it reserves. The Plasma panel has to follow
+        // the window rather than the compositor report: a panel that is put back
+        // while that space is still reserved has nowhere to sit at the bottom, so
+        // it ends up right above the keyboard instead of below it.
+        const bool keyboardOnScreen = keyboardVisible || (m_bridge && m_bridge->keyboardWindowVisible());
 
         // The visible keyboard window follows what the compositor reports: KWin
         // still decides when the keyboard is on screen (input mode and focus),
@@ -608,7 +636,8 @@ public Q_SLOTS:
         if (m_bridge) {
             m_bridge->setKwinVisible(keyboardVisible);
         }
-        qCDebug(PlasmaKeyboard) << "keyboard visible" << keyboardVisible << "input method visible" << QGuiApplication::inputMethod()->isVisible();
+        qCDebug(PlasmaKeyboard) << "keyboard visible" << keyboardVisible << "keyboard on screen" << keyboardOnScreen << "input method visible"
+                                << QGuiApplication::inputMethod()->isVisible();
 
         // Keep the input method in step with the compositor, but only when the
         // compositor actually changed the panel state. Calling show() on every
@@ -631,16 +660,16 @@ public Q_SLOTS:
         // keeps reserving its own space.
         const bool floating = PlasmaKeyboardSettings::self()->floatingKeyboard();
         const bool hidePanel = PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible();
-        if (keyboardVisible != m_lastPanelLayoutVisible) {
-            m_lastPanelLayoutVisible = keyboardVisible;
-            if (!floating && keyboardVisible) {
+        if (keyboardOnScreen != m_lastPanelLayoutVisible) {
+            m_lastPanelLayoutVisible = keyboardOnScreen;
+            if (!floating && keyboardOnScreen) {
                 // Read the panel space before the panel is left in place: it then
                 // keeps no reserved space of its own (see hidePanels()).
                 m_bridge->refreshPanelInsets();
             }
             m_bridge->updatePanelLayout();
         }
-        if (!floating && keyboardVisible && (hidePanel || m_bridge->panelAtBottom())) {
+        if (!floating && keyboardOnScreen && (hidePanel || m_bridge->panelAtBottom())) {
             hidePanels();
         } else {
             restorePanels();
