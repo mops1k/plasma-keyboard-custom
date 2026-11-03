@@ -56,3 +56,19 @@ path = "site/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Aleksandr Kvintilyanov <bednyj.mops@gmail.com>"
 SPDX-License-Identifier = "GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL"
+
+# The swipe engine is vendored from the MIT-licensed Swipe Keyboard project
+# (https://github.com/itsdestin/swipe-keyboard); its sources keep their own
+# SPDX headers. The neural swipe model is MIT as well and was trained on the
+# MIT-licensed FUTO swipe data set, whose licence text travels with it.
+[[annotations]]
+path = "src/swipekb/model/swipe-model.bin"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Destin Moss <https://youcoded.ai>"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/swipekb/model/FUTO-SWIPE-DATA-LICENSE.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 FUTO"
+SPDX-License-Identifier = "MIT"

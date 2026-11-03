@@ -23,6 +23,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QLoggingCategory>
+#include <QRegularExpression>
 #include <QTextFormat>
 #include <QTimer>
 
@@ -559,6 +560,22 @@ QString InputListenerItem::predictionContext() const
     return previousWordBeforeCursor(textBeforeCursor());
 }
 
+bool InputListenerItem::sensitiveInput() const
+{
+    return m_sensitiveInput;
+}
+
+bool InputListenerItem::atSentenceStart() const
+{
+    const QString before = textBeforeCursor();
+    if (before.trimmed().isEmpty()) {
+        return true;
+    }
+    // The space after a sentence end may already be inserted by the keyboard.
+    static const QRegularExpression endOfSentence(QStringLiteral("(^|[.!?…]|\\n)[\\s\"'»”’)\\]]*$"));
+    return endOfSentence.match(before).hasMatch();
+}
+
 void InputListenerItem::updatePredictionWords()
 {
     const QString prefix = predictionPrefix();
@@ -596,6 +613,44 @@ void InputListenerItem::applyPrediction(const QString &word)
     QInputMethodEvent event;
     event.setCommitString(committed, -prefix.size(), prefix.size());
     inputMethodEvent(&event);
+}
+
+void InputListenerItem::commitSwipeWord(const QString &word)
+{
+    if (word.isEmpty() || !m_input.hasContext()) {
+        return;
+    }
+
+    const QString committed = word + QLatin1Char(' ');
+    const QString prefix = predictionPrefix();
+    if (prefix.isEmpty()) {
+        commitText(committed);
+    } else {
+        QInputMethodEvent event;
+        event.setCommitString(committed, -prefix.size(), prefix.size());
+        inputMethodEvent(&event);
+    }
+    // An alternative offered for this swipe may replace exactly this text.
+    m_committedSwipe = committed;
+}
+
+void InputListenerItem::replaceSwipeWord(const QString &word)
+{
+    if (word.isEmpty() || m_committedSwipe.isEmpty() || !m_input.hasContext()) {
+        return;
+    }
+    // Only replace when the inserted word is still right before the cursor: the
+    // text may have been edited in the field since the swipe.
+    if (!textBeforeCursor().endsWith(m_committedSwipe)) {
+        m_committedSwipe.clear();
+        return;
+    }
+
+    const QString committed = word + QLatin1Char(' ');
+    QInputMethodEvent event;
+    event.setCommitString(committed, -m_committedSwipe.size(), m_committedSwipe.size());
+    inputMethodEvent(&event);
+    m_committedSwipe = committed;
 }
 
 void InputListenerItem::setEngine(QVirtualKeyboardInputEngine *engine)
@@ -651,6 +706,12 @@ QVariant InputListenerItem::inputMethodQuery(Qt::InputMethodQuery query) const
         if (imHints & InputPlugin::content_hint_sensitive_data) {
             qtHints |= Qt::ImhSensitiveData;
         }
+        // The personal words of the swipe engine are not learned from a field
+        // that asks not to be remembered.
+        const bool sensitive =
+            (imHints & (InputPlugin::content_hint_password | InputPlugin::content_hint_hidden_text | InputPlugin::content_hint_sensitive_data))
+            || m_input.contentPurpose() == InputPlugin::content_purpose_password;
+        m_sensitiveInput = sensitive;
         if (imHints & InputPlugin::content_hint_latin) {
             qtHints |= Qt::ImhPreferLatin;
         }

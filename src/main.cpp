@@ -33,10 +33,12 @@
 
 #include <QAction>
 #include <QCommandLineParser>
+#include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusVariant>
 #include <QDir>
+#include <QFile>
 #include <QGuiApplication>
 #include <QHash>
 #include <QJsonDocument>
@@ -117,6 +119,111 @@ void evaluatePlasmaScript(const QString &script, bool blocking = false)
     } else {
         QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
     }
+}
+
+// The virtual keyboard shrinks the windows it covers by itself, and KWin does
+// not always give them their size back (KDE bug 459136): the configure event
+// carrying the shrunken size is still on its way to the window when KWin asks
+// the window to grow back, so the window stays short. The workaround is a small
+// script inside KWin that keeps a snapshot of the geometry of the ordinary
+// windows and restores it once the keyboard is gone.
+//
+// KWin loads scripts from a file, so the script is unpacked from the resources
+// into the runtime directory. That is also the place a sandboxed build shares
+// with the compositor, unlike the data directory of the package.
+QString installWindowRestoreScript()
+{
+    QFile resource(QStringLiteral(":/plasma-keyboard/kwinkeyboardrestore.js"));
+    if (!resource.open(QIODevice::ReadOnly)) {
+        qCWarning(PlasmaKeyboard) << "Cannot read the bundled window geometry restore script";
+        return QString();
+    }
+    const QByteArray contents = resource.readAll();
+    resource.close();
+
+    QString directory = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+    if (directory.isEmpty()) {
+        directory = QDir::tempPath();
+    }
+    directory += QStringLiteral("/plasma-keyboard-custom");
+    if (!QDir().mkpath(directory)) {
+        qCWarning(PlasmaKeyboard) << "Cannot create" << directory << "for the window geometry restore script";
+        return QString();
+    }
+
+    const QString path = directory + QStringLiteral("/kwinkeyboardrestore.js");
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate) || file.write(contents) != contents.size()) {
+        qCWarning(PlasmaKeyboard) << "Cannot write the window geometry restore script to" << path;
+        return QString();
+    }
+    return path;
+}
+
+// Loads the window geometry restore script into KWin, or unloads it again.
+void setWindowRestoreScript(const QString &path, bool enabled)
+{
+    const auto call = [&path](const QString &method) {
+        QDBusMessage message =
+            QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Scripting"), QStringLiteral("org.kde.kwin.Scripting"), method);
+        message << path;
+        return QDBusConnection::sessionBus().call(message, QDBus::Block, 1000);
+    };
+
+    // The script can still be loaded from a previous run of the keyboard: KWin
+    // keeps it until it is asked to unload it, and loading it again would leave
+    // two copies of it running.
+    call(QStringLiteral("unloadScript"));
+    if (!enabled) {
+        return;
+    }
+
+    const QDBusMessage reply = call(QStringLiteral("loadScript"));
+    if (reply.type() != QDBusMessage::ReplyMessage) {
+        qCWarning(PlasmaKeyboard) << "Cannot load the window geometry restore script into KWin:" << reply.errorMessage();
+        return;
+    }
+    qCDebug(PlasmaKeyboard) << "window geometry restore script loaded from" << path;
+}
+
+// Space the Plasma panels take on a screen, as reported by plasmashell. The
+// compositor does not tell clients about the available area, and the keyboard
+// needs it to stay above a panel that is left in place: such a panel keeps no
+// reserved space of its own (see KeyboardHotkeyController::hidePanels()), so the
+// keyboard has to reserve the panel's height as well and to lift itself by it.
+QMargins plasmaPanelInsets(const QString &screenName, const QSize &screenSize)
+{
+    if (screenName.isEmpty()) {
+        return QMargins();
+    }
+    QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.plasmashell"),
+                                                      QStringLiteral("/StrutManager"),
+                                                      QStringLiteral("org.kde.PlasmaShell.StrutManager"),
+                                                      QStringLiteral("availableScreenRect"));
+    msg << screenName;
+    const QDBusMessage reply = QDBusConnection::sessionBus().call(msg, QDBus::Block, 500);
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+        return QMargins();
+    }
+    // The compositor answers with a plain (iiii) structure, which Qt does not
+    // turn into a QRect on its own.
+    const QVariant value = reply.arguments().constFirst();
+    QRect rect = value.toRect();
+    if (!rect.isValid() && value.canConvert<QDBusArgument>()) {
+        int x = 0;
+        int y = 0;
+        int width = 0;
+        int height = 0;
+        const QDBusArgument arg = value.value<QDBusArgument>();
+        arg.beginStructure();
+        arg >> x >> y >> width >> height;
+        arg.endStructure();
+        rect = QRect(x, y, width, height);
+    }
+    if (!rect.isValid() || screenSize.isEmpty()) {
+        return QMargins();
+    }
+    return QMargins(rect.x(), rect.y(), qMax(0, screenSize.width() - rect.x() - rect.width()), qMax(0, screenSize.height() - rect.y() - rect.height()));
 }
 
 // Panel containment ids mapped to their configured hiding mode, read from the
@@ -281,6 +388,11 @@ public:
         // hidden, the gamepad mapping is not restored and the focused window keeps
         // the space reserved for the keyboard.
         connect(window, &QWindow::visibleChanged, this, &KeyboardWindowBridge::syncStubVisibility);
+        // KWin stops reporting the keyboard as visible as soon as the text input
+        // goes away, while the window itself stays mapped when the keyboard is
+        // not hidden on focus loss: the Plasma panel has to follow the window as
+        // well (see KeyboardHotkeyController::updatePanelVisibility()).
+        connect(window, &QWindow::visibleChanged, this, &KeyboardWindowBridge::keyboardWindowVisibleChanged);
         // The keyboard belongs on screen only while it is asked for: Qt Virtual
         // Keyboard maps the window when it shows the panel and unmaps it when it
         // hides it. Mapping it here as well put the keyboard on screen (and made
@@ -317,6 +429,27 @@ public:
         applyPanelLayout();
     }
 
+    //! Re-reads the space the Plasma panels take on the keyboard's screen. Needed
+    //! while a panel is left in place: the keyboard then has to reserve that
+    //! space as well and to keep above the panel (see applyPanelLayout()).
+    void refreshPanelInsets()
+    {
+        if (!m_keyboard || !m_keyboard->screen()) {
+            m_panelInsets = QMargins();
+            return;
+        }
+        m_panelInsets = plasmaPanelInsets(m_keyboard->screen()->name(), m_keyboard->screen()->geometry().size());
+        qCDebug(PlasmaKeyboard) << "Plasma panel insets on" << m_keyboard->screen()->name() << m_panelInsets;
+    }
+
+    //! Whether the Plasma panel sits at the bottom of the screen. Only then can
+    //! the keyboard be lifted above it; a panel at the top or on the side keeps
+    //! its own behaviour (see applyPanelLayout()).
+    bool panelAtBottom() const
+    {
+        return m_panelInsets.bottom() > 0 && m_panelInsets.top() == 0;
+    }
+
     //! Tells Qt that the keyboard window is the window the input goes to. Qt
     //! Virtual Keyboard only shows the panel while that is the case, and the
     //! compositor never activates a layer-shell window on its own, so a show
@@ -349,11 +482,22 @@ public:
         return m_kwinVisible;
     }
 
+    //! Whether the keyboard window itself is mapped. KWin reports the keyboard
+    //! as hidden as soon as the text input goes away, but with
+    //! hideOnInputFocusLoss off the window stays on screen and keeps the space
+    //! it reserves, so the Plasma panel has to follow the window as well (see
+    //! KeyboardHotkeyController::updatePanelVisibility()).
+    bool keyboardWindowVisible() const
+    {
+        return m_keyboard && m_keyboard->isVisible();
+    }
+
     //! The compositor re-reserves the space for the panel on its own: the docked
     //! keyboard asks for it with the layer-shell exclusive zone of its window, so
     //! switching modes only has to re-apply that zone (see applyPanelLayout()).
 Q_SIGNALS:
     void kwinVisibleChanged();
+    void keyboardWindowVisibleChanged();
 
 private:
     //! Desktop layout uses the layer-shell exclusive zone. The full-screen
@@ -386,17 +530,40 @@ private:
         }
         const QSize screen = m_keyboard && m_keyboard->screen() ? m_keyboard->screen()->geometry().size() : QSize(1280, 800);
         LayerShellQt::Window::Anchors anchors = LayerShellQt::Window::AnchorLeft;
+        // The panel is left in place when the user asked for it: it then keeps no
+        // reserved space of its own, so the keyboard has to keep above it (see
+        // hidePanels() and refreshPanelInsets()).
+        const bool panelStays = !PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible();
+        // Only a panel at the bottom can be covered by the keyboard; it is also
+        // the only case where the keyboard has to be lifted by the panel height.
+        const bool liftOverPanel = panelStays && panelAtBottom();
         if (PlasmaKeyboardSettings::self()->floatingKeyboard()) {
             anchors |= LayerShellQt::Window::AnchorTop;
             m_layerShell->setDesiredSize(screen);
             m_layerShell->setExclusiveZone(0);
+            m_layerShell->setMargins(QMargins());
         } else {
             anchors |= LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom | LayerShellQt::Window::AnchorRight);
             m_layerShell->setDesiredSize(QSize(0, screen.height()));
-            // A lock-screen field uses keyboardRectangle, not desktop workarea.
-            m_layerShell->setExclusiveZone(m_lockState.allowsPredictions() && m_panelRect.isValid() ? m_panelRect.height() : 0);
+            // The space at the bottom is reserved so that the compositor moves
+            // the focused window out of the way and the keyboard does not float
+            // over it. While the Plasma panel is hidden together with the
+            // keyboard that space is the keyboard alone; when the panel stays it
+            // reserves nothing itself, so the keyboard is lifted above it with
+            // the bottom margin (which the compositor counts as reserved space
+            // as well).
+            const int panelHeight = m_panelRect.isValid() ? m_panelRect.height() : 0;
+            m_layerShell->setExclusiveZone(m_lockState.allowsPredictions() ? panelHeight : 0);
+            m_layerShell->setMargins(QMargins(0, 0, 0, liftOverPanel ? m_panelInsets.bottom() : 0));
         }
         m_layerShell->setAnchors(anchors);
+        // Layer-shell properties only reach the compositor with the next commit
+        // of the surface, so ask for one: without it the reserved space changed
+        // by a setting (or by a panel that changed while the keyboard was on
+        // screen) would only take effect on the next show.
+        if (m_keyboard) {
+            m_keyboard->requestUpdate();
+        }
     }
 
     //! Follow actual surface output events without overriding active-output
@@ -439,6 +606,7 @@ private:
     QPointer<LayerShellQt::Window> m_layerShell;
     QTimer m_outputRelocationTimer;
     QRect m_panelRect;
+    QMargins m_panelInsets;
     bool m_kwinVisible = false;
 };
 
@@ -476,6 +644,11 @@ public:
                                               this,
                                               SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
 
+        // The visible keyboard window can outlive what KWin reports for it (see
+        // updatePanelVisibility()), so the panel state is re-evaluated as soon
+        // as the window is mapped or unmapped, without waiting for the poll.
+        connect(m_bridge, &KeyboardWindowBridge::keyboardWindowVisibleChanged, this, &KeyboardHotkeyController::updatePanelVisibility);
+
         // The PropertiesChanged signal is not always delivered; poll instead.
         auto *pollTimer = new QTimer(this);
         pollTimer->setInterval(1000);
@@ -488,6 +661,11 @@ public:
         // this application, so SettingsReloader watches the file itself.
         connect(&m_settingsReloader, &SettingsReloader::settingsReloaded, this, [this] {
             applyConfiguredMode();
+            // The panel mode and the reserved space depend on the settings, so
+            // put the panel back and let updatePanelVisibility() apply the mode
+            // the settings ask for.
+            restorePanels();
+            m_bridge->updatePanelLayout();
             updatePanelVisibility();
         });
         // A local hide key must also hide the compositor-owned panel. Keep its
@@ -550,6 +728,13 @@ public Q_SLOTS:
         const auto visibilityChange = m_visibility.update(compositorVisible, lock->isKnown(), lock->isLocked(), lock->isPreparingLock(),
                                                          PlasmaKeyboardSettings::self()->hideOnInputFocusLoss());
         const bool keyboardVisible = m_visibility.compositorVisible();
+        // KWin stops treating the keyboard as shown as soon as the text input
+        // goes away, but with hideOnInputFocusLoss off the visible window stays
+        // mapped and keeps the space it reserves. The Plasma panel has to follow
+        // the window rather than the compositor report: a panel that is put back
+        // while that space is still reserved has nowhere to sit at the bottom, so
+        // it ends up right above the keyboard instead of below it.
+        const bool keyboardOnScreen = keyboardVisible || (m_bridge && m_bridge->keyboardWindowVisible());
 
         // The visible keyboard window follows what the compositor reports: KWin
         // still decides when the keyboard is on screen (input mode and focus),
@@ -557,7 +742,8 @@ public Q_SLOTS:
         if (m_bridge) {
             m_bridge->setKwinVisible(keyboardVisible);
         }
-        qCDebug(PlasmaKeyboard) << "keyboard visible" << keyboardVisible << "input method visible" << QGuiApplication::inputMethod()->isVisible();
+        qCDebug(PlasmaKeyboard) << "keyboard visible" << keyboardVisible << "keyboard on screen" << keyboardOnScreen << "input method visible"
+                                << QGuiApplication::inputMethod()->isVisible();
 
         // Only edges are commands: a repeated poll must not undo a local hide.
         // During lock, compositor hide is authoritative regardless of the
@@ -569,9 +755,21 @@ public Q_SLOTS:
         }
 
         // The floating keyboard does not reach the bottom of the screen, so the
-        // Plasma panel is left alone while it is on.
+        // Plasma panel is left alone while it is on. A panel that is not at the
+        // bottom is left alone as well: the keyboard does not cover it, so it
+        // keeps reserving its own space.
         const bool floating = PlasmaKeyboardSettings::self()->floatingKeyboard();
-        if (!floating && PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible() && keyboardVisible) {
+        const bool hidePanel = PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible();
+        if (keyboardOnScreen != m_lastPanelLayoutVisible) {
+            m_lastPanelLayoutVisible = keyboardOnScreen;
+            if (!floating && keyboardOnScreen) {
+                // Read the panel space before the panel is left in place: it then
+                // keeps no reserved space of its own (see hidePanels()).
+                m_bridge->refreshPanelInsets();
+            }
+            m_bridge->updatePanelLayout();
+        }
+        if (!floating && keyboardOnScreen && (hidePanel || m_bridge->panelAtBottom())) {
             hidePanels();
         } else {
             restorePanels();
@@ -613,7 +811,12 @@ private:
             return;
         }
         m_panelsHidden = true;
-        evaluatePlasmaScript(QStringLiteral("panelIds.forEach(function(id){var p=panelById(id);if(p.hiding!==\"autohide\"){p.hiding=\"autohide\";}});"));
+        // Hidden (autohide) when the user asked for it; otherwise the panel is
+        // left at the bottom of the screen without reserved space of its own
+        // ("windows go below"), so that the keyboard can sit above it instead of
+        // pushing it up.
+        const QString mode = PlasmaKeyboardSettings::self()->hidePanelWhenKeyboardVisible() ? QStringLiteral("autohide") : QStringLiteral("windowsgobelow");
+        evaluatePlasmaScript(QStringLiteral("panelIds.forEach(function(id){var p=panelById(id);if(p.hiding!==\"%1\"){p.hiding=\"%1\";}});").arg(mode));
     }
 
     void restorePanels(bool blocking = false)
@@ -638,6 +841,7 @@ private:
     bool m_panelsHidden = false;
     KeyboardVisibilityState m_visibility;
     bool m_applyingCompositorVisibility = false;
+    bool m_lastPanelLayoutVisible = false;
 };
 
 // signal handler for SIGINT & SIGTERM
@@ -952,6 +1156,17 @@ int main(int argc, char **argv)
     // Restart with the new binary after the package was updated (see
     // RestartWatcher).
     new RestartWatcher(&application);
+
+    // KWin does not always give windows back the size the virtual keyboard took
+    // from them (KDE bug 459136), so a small script inside KWin watches the
+    // keyboard and returns the geometry to the windows it shortened.
+    const QString windowRestoreScript = installWindowRestoreScript();
+    if (!windowRestoreScript.isEmpty()) {
+        setWindowRestoreScript(windowRestoreScript, true);
+        QObject::connect(&application, &QCoreApplication::aboutToQuit, &application, [windowRestoreScript] {
+            setWindowRestoreScript(windowRestoreScript, false);
+        });
+    }
 
     return application.exec();
 }

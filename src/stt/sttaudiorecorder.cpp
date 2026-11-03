@@ -14,6 +14,7 @@
 #include <QMediaDevices>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 Q_LOGGING_CATEGORY(lcSttAudio, "org.kde.plasma.keyboard.custom.stt.audio")
@@ -145,9 +146,11 @@ QVector<float> SttAudioRecorder::stop()
     m_source = nullptr;
     m_level = 0;
 
-    const QVector<float> samples = toMono16k();
-    qCDebug(lcSttAudio) << "recording stopped," << samples.size() << "samples (" << (TargetSampleRate > 0 ? samples.size() * 1000 / TargetSampleRate : 0)
-                        << "ms)";
+    const QVector<float> recorded = toMono16k();
+    const QVector<float> samples = trimSilence(recorded);
+    qCDebug(lcSttAudio) << "recording stopped," << recorded.size() << "samples (" << (TargetSampleRate > 0 ? recorded.size() * 1000 / TargetSampleRate : 0)
+                        << "ms)," << samples.size() << "samples after trimming the silence ("
+                        << (TargetSampleRate > 0 ? samples.size() * 1000 / TargetSampleRate : 0) << "ms)";
     Q_EMIT recordingChanged(false);
     Q_EMIT levelChanged(0);
     return samples;
@@ -217,6 +220,60 @@ float SttAudioRecorder::sampleAt(const char *pointer) const
     default:
         return 0.0f;
     }
+}
+
+QVector<float> SttAudioRecorder::trimSilence(const QVector<float> &samples)
+{
+    // The windows the level is measured in, the silence kept before the first
+    // and after the last sound (so the sound itself is never cut), and how
+    // loud a window has to be to count as sound: a sixteenth of the loudest
+    // window (-24 dB) passes quiet speech in a noisy room while the noise
+    // floor of the microphone stays below it.
+    constexpr int WindowMs = 20;
+    constexpr int MarginMs = 100;
+    constexpr float ThresholdRatio = 1.0f / 16.0f;
+
+    const int windowSize = TargetSampleRate * WindowMs / 1000;
+    if (samples.isEmpty() || windowSize <= 0) {
+        return samples;
+    }
+
+    const int windowCount = (samples.size() + windowSize - 1) / windowSize;
+    QVector<float> levels(windowCount);
+    float peak = 0.0f;
+    for (int window = 0; window < windowCount; ++window) {
+        const int begin = window * windowSize;
+        const int end = qMin(begin + windowSize, samples.size());
+        double sum = 0.0;
+        for (int i = begin; i < end; ++i) {
+            sum += double(samples.at(i)) * double(samples.at(i));
+        }
+        const float rms = float(std::sqrt(sum / qMax(1, end - begin)));
+        levels[window] = rms;
+        peak = qMax(peak, rms);
+    }
+
+    if (peak <= 0.0f) {
+        return QVector<float>();
+    }
+
+    const float threshold = peak * ThresholdRatio;
+    int first = 0;
+    while (first < windowCount && levels.at(first) < threshold) {
+        ++first;
+    }
+    int last = windowCount - 1;
+    while (last >= first && levels.at(last) < threshold) {
+        --last;
+    }
+    if (first > last) {
+        return QVector<float>();
+    }
+
+    const int margin = TargetSampleRate * MarginMs / 1000;
+    const int begin = qMax(0, first * windowSize - margin);
+    const int end = qMin(samples.size(), (last + 1) * windowSize + margin);
+    return samples.mid(begin, end - begin);
 }
 
 QVector<float> SttAudioRecorder::toMono16k() const

@@ -113,6 +113,12 @@ class InputListenerItem : public QQuickItem
     Q_PROPERTY(bool auxiliaryUiAllowed READ predictionActive NOTIFY predictionTargetChanged)
 
     /**
+     * Whether the focused field is a password or asks for sensitive data, so
+     * the keyboard must not remember what is typed into it.
+     */
+    Q_PROPERTY(bool sensitiveInput READ sensitiveInput)
+
+    /**
      * The word being typed: the letters before the cursor, together with the
      * hyphens and apostrophes inside them («что-то», «don't»). Empty when the
      * field is not being typed into or the cursor is not after a word.
@@ -168,11 +174,34 @@ public:
      */
     QString predictionContext() const;
 
+    bool sensitiveInput() const;
+
+    /**
+     * Whether the cursor stands at the beginning of a sentence: the field is
+     * empty or the text before it ends a sentence («. », «! », «? » or a line
+     * break). Used to capitalise a word the keyboard inserts as a whole.
+     */
+    Q_INVOKABLE bool atSentenceStart() const;
+
     /**
      * Replaces the word being typed with @p word, the way a suggestion is
      * taken. The word carries the case it should be typed in.
      */
     Q_INVOKABLE void applyPrediction(const QString &word);
+
+    /**
+     * Types the word of a swipe gesture: replaces the word being typed (if any)
+     * with @p word and adds the space after it, and remembers what was inserted
+     * so that an alternative can replace it again.
+     */
+    Q_INVOKABLE void commitSwipeWord(const QString &word);
+
+    /**
+     * Replaces the word the last swipe inserted with @p word, keeping the space
+     * after it. Does nothing when the text no longer ends with that word (the
+     * person typed something else in between).
+     */
+    Q_INVOKABLE void replaceSwipeWord(const QString &word);
 
     /**
      * The alternate characters a key offers, in the form they would be typed.
@@ -253,6 +282,13 @@ private:
 
     //! The word the next-word predictions are currently looked up with.
     QString m_predictionContext;
+
+    //! The text (word and space) the last swipe inserted, so that one of its
+    //! alternatives can replace it.
+    QString m_committedSwipe;
+
+    //! Whether the focused field is a password or asks for sensitive data.
+    mutable bool m_sensitiveInput = false;
 
     //! True after the keyboard was hidden (by the user or by the system) and
     //! until the next input activation. A focused text field keeps sending

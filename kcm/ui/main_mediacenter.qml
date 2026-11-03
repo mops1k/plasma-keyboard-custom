@@ -297,6 +297,31 @@ KCM.SimpleKCM {
         }
 
         Bigscreen.SwitchDelegate {
+            id: swipeTypingButton
+            text: i18n("Swipe typing")
+            KeyNavigation.up: predictiveTextButton
+
+            checked: kcm.swipeTypingEnabled
+            onCheckedChanged: {
+                kcm.swipeTypingEnabled = checked;
+                checked = Qt.binding(() => kcm.swipeTypingEnabled);
+            }
+        }
+
+        Bigscreen.SwitchDelegate {
+            id: swipeLearningButton
+            text: i18n("Remember typed words")
+            enabled: swipeTypingButton.checked
+            KeyNavigation.up: swipeTypingButton
+
+            checked: kcm.swipeLearningEnabled
+            onCheckedChanged: {
+                kcm.swipeLearningEnabled = checked;
+                checked = Qt.binding(() => kcm.swipeLearningEnabled);
+            }
+        }
+
+        Bigscreen.SwitchDelegate {
             id: predictiveNextWordButton
             text: i18n("Next word")
             KeyNavigation.up: predictiveTextButton

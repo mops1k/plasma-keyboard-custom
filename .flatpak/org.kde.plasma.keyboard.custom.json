@@ -80,7 +80,8 @@
             "config-opts": [
                 "-DCMAKE_BUILD_TYPE=Release",
                 "-DBUILD_TESTING=OFF",
-                "-DWHISPER_CPP_SOURCE_DIR=whisper-cpp/whisper.cpp-1.9.3"
+                "-DWHISPER_CPP_SOURCE_DIR=whisper-cpp/whisper.cpp-1.9.3",
+                "-DTRANSCRIBE_CPP_SOURCE_DIR=transcribe-cpp/transcribe.cpp-5bb2deb2a4afb1fd50534ecb51cfcb521ef94944"
             ],
             "sources": [
                 {
@@ -100,6 +101,13 @@
                     "sha256": "1650f884effba487025143bd8facd2f9fb40a83b3737a732803c67a8d659d9c0",
                     "strip-components": 0,
                     "dest": "whisper-cpp"
+                },
+                {
+                    "type": "archive",
+                    "url": "https://github.com/handy-computer/transcribe.cpp/archive/5bb2deb2a4afb1fd50534ecb51cfcb521ef94944.tar.gz",
+                    "sha256": "c6491711a6eb3c44217118f20cdf3c9ce877d175e407c7a253a52e5c0c6a824d",
+                    "strip-components": 0,
+                    "dest": "transcribe-cpp"
                 }
             ]
         }

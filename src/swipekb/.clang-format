@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Aleksandr Kvintilyanov <bednyj.mops@gmail.com>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# The swipe engine is vendored from the Swipe Keyboard project (MIT) and keeps
+# its upstream formatting; see README.md in this directory.
+DisableFormat: true

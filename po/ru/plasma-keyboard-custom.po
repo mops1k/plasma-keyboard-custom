@@ -51,6 +51,30 @@ msgstr "Распознавание Whisper завершилось ошибкой
 msgid "The Vosk library (vosk-api) is not installed."
 msgstr "Библиотека Vosk (vosk-api) не установлена."
 
+#: stt/gigaamengine.cpp
+msgid "The transcribe.cpp library (libtranscribe) is not installed."
+msgstr "Библиотека transcribe.cpp (libtranscribe) не установлена."
+
+#: stt/gigaamengine.cpp
+msgid "The GigaAM model file does not exist: %1"
+msgstr "Файл модели GigaAM не найден: %1"
+
+#: stt/gigaamengine.cpp
+msgid "Cannot load the GigaAM model: %1"
+msgstr "Не удалось загрузить модель GigaAM: %1"
+
+#: stt/gigaamengine.cpp
+msgid "Cannot create the GigaAM session for “%1”."
+msgstr "Не удалось создать сессию GigaAM для «%1»."
+
+#: stt/gigaamengine.cpp
+msgid "The GigaAM model is not loaded."
+msgstr "Модель GigaAM не загружена."
+
+#: stt/gigaamengine.cpp
+msgid "The GigaAM recognition failed: %1"
+msgstr "Распознавание GigaAM завершилось ошибкой: %1"
+
 #: stt/voskengine.cpp
 msgid "The Vosk model directory does not exist: %1"
 msgstr "Каталог модели Vosk не найден: %1"

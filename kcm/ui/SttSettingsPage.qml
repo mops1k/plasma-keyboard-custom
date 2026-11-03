@@ -30,6 +30,10 @@ SettingsFormPage {
             "text": i18n("Whisper")
         },
         {
+            "value": "gigaam",
+            "text": i18n("GigaAM v3 (Russian)")
+        },
+        {
             "value": "vosk",
             "text": i18n("Vosk")
         }
@@ -95,7 +99,7 @@ SettingsFormPage {
 
     SettingsRow {
         label: i18n("Engine:")
-        description: i18n("Parakeet v3 recognises the most languages and is the fastest; Whisper is the classic model; Vosk has the smallest models.")
+        description: i18n("Parakeet v3 recognises the most languages and is the fastest; Whisper is the classic model; GigaAM v3 is trained for Russian; Vosk has the smallest models.")
         controlFillWidth: true
 
         QQC2.ComboBox {
@@ -137,14 +141,24 @@ SettingsFormPage {
                     parts.push(modelData.language);
                 }
                 if (modelData.installed) {
-                    parts.push(i18n("installed"));
+                    parts.push(modelData.active ? i18n("in use") : i18n("installed"));
                 }
                 return parts.join(" · ");
             }
+            // The model the engine uses is chosen with the radio button; the
+            // choice is applied with the "Apply" button, like every other
+            // setting of the module.
             visible: kcm.sttEnabled
 
             RowLayout {
                 spacing: Kirigami.Units.smallSpacing
+
+                QQC2.RadioButton {
+                    text: i18n("Use")
+                    visible: modelData.installed && !modelData.busy
+                    checked: modelData.active
+                    onClicked: kcm.setActiveSttModel(modelData.id)
+                }
 
                 QQC2.ProgressBar {
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6

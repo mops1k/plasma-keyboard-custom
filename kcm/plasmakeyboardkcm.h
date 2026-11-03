@@ -59,9 +59,10 @@ class PlasmaKeyboardKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool predictiveNextWordEnabled READ predictiveNextWordEnabled WRITE setPredictiveNextWordEnabled NOTIFY predictiveNextWordEnabledChanged)
     Q_PROPERTY(bool predictiveTypoCorrectionEnabled READ predictiveTypoCorrectionEnabled WRITE setPredictiveTypoCorrectionEnabled NOTIFY
                    predictiveTypoCorrectionEnabledChanged)
+    Q_PROPERTY(bool swipeTypingEnabled READ swipeTypingEnabled WRITE setSwipeTypingEnabled NOTIFY swipeTypingEnabledChanged)
+    Q_PROPERTY(bool swipeLearningEnabled READ swipeLearningEnabled WRITE setSwipeLearningEnabled NOTIFY swipeLearningEnabledChanged)
     Q_PROPERTY(bool sttEnabled READ sttEnabled WRITE setSttEnabled NOTIFY sttEnabledChanged)
     Q_PROPERTY(QString sttEngine READ sttEngine WRITE setSttEngine NOTIFY sttEngineChanged)
-    Q_PROPERTY(QString sttModelPath READ sttModelPath WRITE setSttModelPath NOTIFY sttModelPathChanged)
     Q_PROPERTY(QString sttLanguageMode READ sttLanguageMode WRITE setSttLanguageMode NOTIFY sttLanguageModeChanged)
     Q_PROPERTY(QString sttLanguage READ sttLanguage WRITE setSttLanguage NOTIFY sttLanguageChanged)
     Q_PROPERTY(QString sttInputDevice READ sttInputDevice WRITE setSttInputDevice NOTIFY sttInputDeviceChanged)
@@ -182,15 +183,18 @@ public:
     bool predictiveTypoCorrectionEnabled() const;
     void setPredictiveTypoCorrectionEnabled(bool enabled);
 
+    // Swipe (glide) typing: dragging across the letter keys types the word.
+    bool swipeTypingEnabled() const;
+    void setSwipeTypingEnabled(bool enabled);
+    bool swipeLearningEnabled() const;
+    void setSwipeLearningEnabled(bool enabled);
+
     // Voice input (local speech recognition).
     bool sttEnabled() const;
     void setSttEnabled(bool enabled);
 
     QString sttEngine() const;
     void setSttEngine(const QString &engine);
-
-    QString sttModelPath() const;
-    void setSttModelPath(const QString &path);
 
     QString sttLanguageMode() const;
     void setSttLanguageMode(const QString &mode);
@@ -214,6 +218,9 @@ public:
 
     //! Downloads a model from the catalog; the list follows the progress.
     Q_INVOKABLE void downloadSttModel(const QString &id);
+
+    //! Makes the installed model \a id the one its engine uses.
+    Q_INVOKABLE void setActiveSttModel(const QString &id);
 
     //! Stops the download that is running.
     Q_INVOKABLE void cancelSttDownload();
@@ -266,9 +273,10 @@ Q_SIGNALS:
     void predictiveMinPrefixLengthChanged();
     void predictiveNextWordEnabledChanged();
     void predictiveTypoCorrectionEnabledChanged();
+    void swipeTypingEnabledChanged();
+    void swipeLearningEnabledChanged();
     void sttEnabledChanged();
     void sttEngineChanged();
-    void sttModelPathChanged();
     void sttLanguageModeChanged();
     void sttLanguageChanged();
     void sttInputDeviceChanged();
@@ -305,6 +313,8 @@ private:
     int m_predictiveMinPrefixLength = 1;
     bool m_predictiveNextWordEnabled = true;
     bool m_predictiveTypoCorrectionEnabled = true;
+    bool m_swipeTypingEnabled = true;
+    bool m_swipeLearningEnabled = true;
 
     bool m_sttEnabled = false;
     QString m_sttEngine = QStringLiteral("parakeet");

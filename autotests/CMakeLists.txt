@@ -233,6 +233,7 @@ ecm_add_test(sttenginestest.cpp
     ../src/stt/sttengine.cpp
     ../src/stt/parakeetengine.cpp
     ../src/stt/whisperengine.cpp
+    ../src/stt/gigaamengine.cpp
     ../src/stt/voskengine.cpp
     ../src/stt/sttaudiorecorder.cpp
     TEST_NAME sttenginestest
@@ -248,3 +249,18 @@ ecm_add_test(sttenginestest.cpp
 target_include_directories(sttenginestest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/stt
 )
+
+# The swipe engine (src/swipekb) on a synthetic finger path through the key
+# grid, with the word lists generated at build time from the predictive lists.
+ecm_add_test(swipeenginetest.cpp
+    TEST_NAME swipeenginetest
+    LINK_LIBRARIES
+        Qt::Core
+        Qt::Test
+        swipekb_engine
+)
+
+target_compile_definitions(swipeenginetest PRIVATE
+    SWIPE_DICTIONARY_DIR="${CMAKE_BINARY_DIR}/src/swipekb/dictionaries"
+)
+add_dependencies(swipeenginetest swipe_dictionaries)

@@ -67,11 +67,19 @@ optdepends=('hunspell: use the dictionaries of the system for the spelling and t
 # both Whisper and Parakeet. It is not a package dependency: the sources are
 # built together with the keyboard, because the release is built against an
 # Arch snapshot that does not ship whisper-cpp.
+#
+# The GigaAM engine comes from transcribe.cpp (MIT). It is built as a library
+# of its own (libtranscribe.so, installed with the keyboard) because it
+# vendors its own ggml, which cannot be linked into the same binary as the
+# ggml whisper.cpp brings in.
 _whisper_version=1.9.3
+_transcribe_commit=5bb2deb2a4afb1fd50534ecb51cfcb521ef94944
 source=("$pkgname-$pkgver.tar.gz"
-        "whisper.cpp-$_whisper_version.tar.gz::https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v$_whisper_version.tar.gz")
+        "whisper.cpp-$_whisper_version.tar.gz::https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v$_whisper_version.tar.gz"
+        "transcribe.cpp-$_transcribe_commit.tar.gz::https://github.com/handy-computer/transcribe.cpp/archive/$_transcribe_commit.tar.gz")
 sha256sums=('SKIP'
-            '1650f884effba487025143bd8facd2f9fb40a83b3737a732803c67a8d659d9c0')
+            '1650f884effba487025143bd8facd2f9fb40a83b3737a732803c67a8d659d9c0'
+            'c6491711a6eb3c44217118f20cdf3c9ce877d175e407c7a253a52e5c0c6a824d')
 
 build() {
   cmake -B build -S "$pkgname-$pkgver" -G Ninja \
@@ -80,6 +88,7 @@ build() {
     -DKDE_INSTALL_USE_QT_SYS_PATHS=ON \
     -DKDE_INSTALL_LIBDIR=lib \
     -DWHISPER_CPP_SOURCE_DIR="$srcdir/whisper.cpp-$_whisper_version" \
+    -DTRANSCRIBE_CPP_SOURCE_DIR="$srcdir/transcribe.cpp-$_transcribe_commit" \
     -DBUILD_TESTING=OFF
   cmake --build build
 }

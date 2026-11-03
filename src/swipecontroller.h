@@ -1,0 +1,118 @@
+/*
+    SPDX-FileCopyrightText: 2026 Aleksandr Kvintilyanov <bednyj.mops@gmail.com>
+
+    SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
+*/
+
+#pragma once
+
+#include <QHash>
+#include <QObject>
+#include <QStringList>
+#include <QVariantList>
+
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <qqmlintegration.h>
+
+class QTimer;
+
+namespace swipekb
+{
+class LanguageEngine;
+}
+
+/**
+ * Swipe (glide) typing: turns the finger path and the letter-key rectangles
+ * into ranked words with the vendored MIT engine (src/swipekb).
+ *
+ * One language engine per language, built on first use: English loads the
+ * neural swipe model, Russian is decoded by geometry over the Russian word
+ * list. The word lists are AOSP .combined files generated at build time from
+ * the predictive word lists and installed to
+ * <datadir>/plasma-keyboard-custom/swipe/.
+ *
+ * The engine is not thread-safe; every call happens on the GUI thread and a
+ * decode takes a few milliseconds.
+ */
+class SwipeController : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+
+public:
+    explicit SwipeController(QObject *parent = nullptr);
+    ~SwipeController() override;
+
+    /**
+     * Whether a word list for @p locale is installed, so a swipe can be typed
+     * in that language.
+     */
+    Q_INVOKABLE bool supports(const QString &locale) const;
+
+    /**
+     * The words the finger path may have spelled, best first.
+     *
+     * @param locale The input locale ("ru_RU", "en_US", ...); a language
+     *               without an installed word list has no swipe typing.
+     * @param trace Points of the path: records with x, y (window pixels) and t
+     *              (milliseconds since the swipe started).
+     * @param keys  The letter keys of the current layout: records with letter,
+     *              x, y, w and h in the same pixels.
+     * @param context The previous word, when there is one (the engine's
+     *              sentence prior is not loaded yet, so it only matters later).
+     * @param limit At most this many words.
+     * @return Ranked words, or an empty list when nothing could be recognised.
+     */
+    Q_INVOKABLE QStringList recognize(const QString &locale, const QVariantList &trace, const QVariantList &keys, const QStringList &context, int limit);
+
+    /**
+     * Drops the engines of the languages that are no longer needed (the
+     * layout changed, the keyboard was hidden).
+     */
+    Q_INVOKABLE void reset();
+
+    /**
+     * Remembers that @p word was typed, so that the same words are preferred
+     * later. Only letters are kept; the words are stored per language in
+     * <datadir>/plasma-keyboard-custom/swipe/learned-<lang>.json.
+     *
+     * The caller decides whether the field may be remembered at all (password
+     * fields are not); this method does not look at the focused field.
+     */
+    Q_INVOKABLE void learnWord(const QString &word, const QString &locale);
+
+    /**
+     * Forgets the words learned for the language of @p locale.
+     */
+    Q_INVOKABLE void clearLearnedWords(const QString &locale);
+
+public Q_SLOTS:
+    /**
+     * The same recognition, for scripts and tests over D-Bus
+     * (org.kde.plasma.keyboard.custom /SwipeDebug), from one JSON string:
+     * {"trace": [[x, y, t], ...], "keys": [["letter", x, y, w, h], ...]},
+     * both in the window's pixels, the keys with their top-left corner, as the
+     * engine expects them.
+     */
+    QStringList recognizeJson(const QString &locale, const QString &request);
+
+private:
+    swipekb::LanguageEngine *engineFor(const QString &locale);
+
+    static QString languageOf(const QString &locale);
+    static QString dataFile(const QString &name);
+    static QString learnedPath(const QString &language);
+
+    void loadLearned(const QString &language);
+    void saveLearned(const QString &language);
+    std::vector<std::pair<std::string, int>> learnedWordsFor(const QString &language) const;
+
+    QHash<QString, std::shared_ptr<swipekb::LanguageEngine>> m_engines;
+    //! The words that were typed, with how many times, per language.
+    QHash<QString, QHash<QString, int>> m_learned;
+    QTimer *m_saveTimer = nullptr;
+};

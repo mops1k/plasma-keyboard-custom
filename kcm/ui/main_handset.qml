@@ -354,6 +354,33 @@ KCM.SimpleKCM {
 
             FormCard.FormDelegateSeparator {}
 
+            FormCard.FormSwitchDelegate {
+                id: swipeTypingCheckbox
+                text: i18n("Swipe typing")
+                description: i18n("Type a word by dragging across its letters")
+
+                checked: kcm.swipeTypingEnabled
+                onCheckedChanged: {
+                    kcm.swipeTypingEnabled = checked;
+                    checked = Qt.binding(() => kcm.swipeTypingEnabled)
+                }
+            }
+
+            FormCard.FormSwitchDelegate {
+                id: swipeLearningCheckbox
+                text: i18n("Remember typed words")
+                description: i18n("Prefer the words typed with swipe typing; passwords are never remembered")
+                enabled: swipeTypingCheckbox.checked
+
+                checked: kcm.swipeLearningEnabled
+                onCheckedChanged: {
+                    kcm.swipeLearningEnabled = checked;
+                    checked = Qt.binding(() => kcm.swipeLearningEnabled)
+                }
+            }
+
+            FormCard.FormDelegateSeparator {}
+
             FormCard.FormSpinBoxDelegate {
                 label: i18n("Suggestions at once")
                 description: i18n("How many word suggestions are offered at the same time")
