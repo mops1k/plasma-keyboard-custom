@@ -10,6 +10,8 @@
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QLocale>
 
 namespace
@@ -31,9 +33,10 @@ SystemLayoutSync::SystemLayoutSync(QObject *parent)
         .connect(QLatin1String(s_service), QLatin1String(s_path), QLatin1String(s_iface), QStringLiteral("layoutChanged"), this, SLOT(onLayoutChanged(uint)));
 }
 
-QStringList SystemLayoutSync::layouts() const
+namespace
 {
-    const QDBusMessage reply = QDBusConnection::sessionBus().call(layoutsCall(QStringLiteral("getLayoutsList")));
+QStringList parseLayouts(const QDBusMessage &reply)
+{
     QStringList names;
     if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
         return names;
@@ -53,14 +56,27 @@ QStringList SystemLayoutSync::layouts() const
     arg.endArray();
     return names;
 }
+}
 
-int SystemLayoutSync::currentLayout() const
+// Never block the GUI thread on the layout daemon: every call is asynchronous
+// and the continuation runs from the event loop.
+void SystemLayoutSync::fetchLayouts(std::function<void(const QStringList &)> done)
 {
-    const QDBusMessage reply = QDBusConnection::sessionBus().call(layoutsCall(QStringLiteral("getLayout")));
-    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
-        return -1;
-    }
-    return static_cast<int>(reply.arguments().first().toUInt());
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(layoutsCall(QStringLiteral("getLayoutsList"))), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [watcher, done = std::move(done)] {
+        done(parseLayouts(QDBusMessage(watcher->reply())));
+        watcher->deleteLater();
+    });
+}
+
+void SystemLayoutSync::fetchCurrentLayout(std::function<void(int)> done)
+{
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(layoutsCall(QStringLiteral("getLayout"))), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [watcher, done = std::move(done)] {
+        const QDBusMessage reply = watcher->reply();
+        done(reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty() ? static_cast<int>(reply.arguments().first().toUInt()) : -1);
+        watcher->deleteLater();
+    });
 }
 
 QString SystemLayoutSync::layoutForLocale(const QString &locale) const
@@ -84,21 +100,28 @@ void SystemLayoutSync::syncToLocale(const QString &locale)
     if (wanted.isEmpty()) {
         return;
     }
-    const QStringList names = layouts();
-    const int index = names.indexOf(wanted);
-    if (index < 0 || index == currentLayout()) {
-        return;
-    }
-    qCDebug(PlasmaKeyboard) << "switching the system layout to" << wanted << "for" << locale;
-    QDBusMessage msg = layoutsCall(QStringLiteral("setLayout"));
-    msg << static_cast<uint>(index);
-    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+    fetchLayouts([this, wanted, locale](const QStringList &names) {
+        const int index = names.indexOf(wanted);
+        if (index < 0) {
+            return;
+        }
+        fetchCurrentLayout([this, wanted, locale, index](int current) {
+            if (index == current) {
+                return;
+            }
+            qCDebug(PlasmaKeyboard) << "switching the system layout to" << wanted << "for" << locale;
+            QDBusMessage msg = layoutsCall(QStringLiteral("setLayout"));
+            msg << static_cast<uint>(index);
+            QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+        });
+    });
 }
 
 void SystemLayoutSync::onLayoutChanged(uint index)
 {
-    const QStringList names = layouts();
-    if (index < static_cast<uint>(names.size())) {
-        Q_EMIT systemLayoutChanged(names.at(index));
-    }
+    fetchLayouts([this, index](const QStringList &names) {
+        if (index < static_cast<uint>(names.size())) {
+            Q_EMIT systemLayoutChanged(names.at(index));
+        }
+    });
 }

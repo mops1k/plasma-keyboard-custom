@@ -264,3 +264,13 @@ target_compile_definitions(swipeenginetest PRIVATE
     SWIPE_DICTIONARY_DIR="${CMAKE_BINARY_DIR}/src/swipekb/dictionaries"
 )
 add_dependencies(swipeenginetest swipe_dictionaries)
+
+# These tests need a private session bus; without one they skip themselves, so
+# CI would never exercise them. Run them under dbus-run-session when available.
+find_program(DBUS_RUN_SESSION dbus-run-session)
+if(DBUS_RUN_SESSION)
+    foreach(_busTest focusededitabletrackertest clipboardhistorytest sessionlockstatetest)
+        set_target_properties(${_busTest} PROPERTIES CROSSCOMPILING_EMULATOR "${DBUS_RUN_SESSION}")
+        set_tests_properties(${_busTest} PROPERTIES ENVIRONMENT "PLASMA_KEYBOARD_TEST_ISOLATED_BUS=1;QT_QPA_PLATFORM=offscreen")
+    endforeach()
+endif()

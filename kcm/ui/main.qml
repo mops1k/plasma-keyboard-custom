@@ -442,6 +442,34 @@ KCM.AbstractKCM {
             }
 
             SettingsRow {
+                label: i18n("Modifier hold delay:")
+                description: i18n("How long Ctrl, Alt or Win must be held to act as a held key instead of latching for the next key")
+                controlFillWidth: true
+
+                QQC2.SpinBox {
+                    id: modifierHoldDelaySpinBox
+                    Layout.fillWidth: true
+                    from: 100
+                    to: 1500
+                    stepSize: 50
+                    value: kcm.modifierHoldThresholdMs
+
+                    textFromValue: function (value) {
+                        return i18nc("duration in milliseconds", "%1 ms", value);
+                    }
+                    valueFromText: function (text) {
+                        const number = parseInt(text);
+                        return isNaN(number) ? kcm.modifierHoldThresholdMs : number;
+                    }
+
+                    onValueChanged: {
+                        kcm.modifierHoldThresholdMs = value;
+                        value = Qt.binding(() => kcm.modifierHoldThresholdMs);
+                    }
+                }
+            }
+
+            SettingsRow {
                 label: i18n("Word suggestions:")
                 description: i18n("Offer words that continue what is being typed")
 

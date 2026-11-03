@@ -7,6 +7,7 @@
 #pragma once
 
 #include <QObject>
+#include <functional>
 #include <QString>
 #include <QStringList>
 
@@ -42,6 +43,6 @@ private Q_SLOTS:
     void onLayoutChanged(uint index);
 
 private:
-    QStringList layouts() const;
-    int currentLayout() const;
+    void fetchLayouts(std::function<void(const QStringList &)> done);
+    void fetchCurrentLayout(std::function<void(int)> done);
 };

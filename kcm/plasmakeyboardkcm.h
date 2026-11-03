@@ -53,6 +53,7 @@ class PlasmaKeyboardKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool gamepadAlternatesEnabled READ gamepadAlternatesEnabled WRITE setGamepadAlternatesEnabled NOTIFY gamepadAlternatesEnabledChanged)
     Q_PROPERTY(
         int gamepadAlternatesThresholdMs READ gamepadAlternatesThresholdMs WRITE setGamepadAlternatesThresholdMs NOTIFY gamepadAlternatesThresholdMsChanged)
+    Q_PROPERTY(int modifierHoldThresholdMs READ modifierHoldThresholdMs WRITE setModifierHoldThresholdMs NOTIFY modifierHoldThresholdMsChanged)
     Q_PROPERTY(bool predictiveTextEnabled READ predictiveTextEnabled WRITE setPredictiveTextEnabled NOTIFY predictiveTextEnabledChanged)
     Q_PROPERTY(int predictiveSuggestionCount READ predictiveSuggestionCount WRITE setPredictiveSuggestionCount NOTIFY predictiveSuggestionCountChanged)
     Q_PROPERTY(int predictiveMinPrefixLength READ predictiveMinPrefixLength WRITE setPredictiveMinPrefixLength NOTIFY predictiveMinPrefixLengthChanged)
@@ -167,6 +168,8 @@ public:
 
     int gamepadAlternatesThresholdMs() const;
     void setGamepadAlternatesThresholdMs(int thresholdMs);
+    int modifierHoldThresholdMs() const;
+    void setModifierHoldThresholdMs(int thresholdMs);
 
     bool predictiveTextEnabled() const;
     void setPredictiveTextEnabled(bool enabled);
@@ -268,6 +271,7 @@ Q_SIGNALS:
     void diacriticsHoldThresholdMsChanged();
     void gamepadAlternatesEnabledChanged();
     void gamepadAlternatesThresholdMsChanged();
+    void modifierHoldThresholdMsChanged();
     void predictiveTextEnabledChanged();
     void predictiveSuggestionCountChanged();
     void predictiveMinPrefixLengthChanged();
@@ -308,6 +312,7 @@ private:
     int m_diacriticsHoldThresholdMs = 600;
     bool m_gamepadAlternatesEnabled = true;
     int m_gamepadAlternatesThresholdMs = 400;
+    int m_modifierHoldThresholdMs = 400;
     bool m_predictiveTextEnabled = true;
     int m_predictiveSuggestionCount = 3;
     int m_predictiveMinPrefixLength = 1;
