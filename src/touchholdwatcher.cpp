@@ -1,5 +1,5 @@
 /*
-    SPDX-FileCopyrightText: 2026 Kristen McWilliam <kristen@kde.org>
+    SPDX-FileCopyrightText: 2026 Chechulin Serhii
 
     SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 */
@@ -72,15 +72,15 @@ input_absinfo axisInfo(int fd, unsigned int code)
 TouchHoldWatcher::TouchHoldWatcher(QObject *parent)
     : QObject(parent)
 {
-    // Start observing before an input context is activated. Opening the device
+    // Start observing before an input context is activated. Opening the devices
     // from arm() is too late for the first touch: the BTN_TOUCH press that
     // focused the text field has already been delivered by then, so the watcher
     // only sees its release and can never recognise that first long press.
     // Failure is harmless; arm() retries in case permissions or devices change.
-    openTouchscreen();
+    openTouchscreens();
 
     connect(&m_holdTimer, &QTimer::timeout, this, [this] {
-        if (m_armed && m_touchDown && !m_gestureMoved && m_activeSlots.size() <= 1) {
+        if (m_armed && m_activeDevice && m_activeDevice->touchDown && !m_activeDevice->gestureMoved && m_activeDevice->activeSlots.size() <= 1) {
             // One activation arms exactly one touch. Keeping this armed after
             // success would make a still-focused text field turn every later
             // long press anywhere on the screen into a keyboard request.
@@ -95,58 +95,80 @@ TouchHoldWatcher::TouchHoldWatcher(QObject *parent)
 
 TouchHoldWatcher::~TouchHoldWatcher()
 {
-    delete m_notifier;
-    if (m_fd >= 0) {
-        ::close(m_fd);
+    for (auto &dev : m_devices) {
+        delete dev->notifier;
+        if (dev->fd >= 0) {
+            ::close(dev->fd);
+        }
     }
 }
 
-bool TouchHoldWatcher::openTouchscreen()
+bool TouchHoldWatcher::openTouchscreens()
 {
     const auto devices = QDir(QStringLiteral("/dev/input")).entryList({QStringLiteral("event*")}, QDir::System, QDir::Name);
     for (const QString &name : devices) {
         const QString path = QStringLiteral("/dev/input/") + name;
+        const bool alreadyOpen = std::any_of(m_devices.begin(), m_devices.end(), [&](const auto &d) {
+            return d->path == path;
+        });
+        if (alreadyOpen) {
+            continue;
+        }
+
         const int fd = ::open(path.toUtf8().constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0) {
             continue;
         }
         if (hasCapability(fd, EV_ABS, ABS_MT_POSITION_X) && hasCapability(fd, EV_KEY, BTN_TOUCH) && isDirectInput(fd)) {
-            m_fd = fd;
+            auto dev = std::make_unique<Device>();
+            dev->fd = fd;
+            dev->path = path;
             const input_absinfo xInfo = axisInfo(fd, ABS_MT_POSITION_X);
             const input_absinfo yInfo = axisInfo(fd, ABS_MT_POSITION_Y);
-            m_xMinimum = xInfo.minimum;
-            m_xMaximum = xInfo.maximum;
-            m_yMinimum = yInfo.minimum;
-            m_yMaximum = yInfo.maximum;
-            m_xSlop = movementSlop(fd, ABS_MT_POSITION_X);
-            m_ySlop = movementSlop(fd, ABS_MT_POSITION_Y);
-            m_notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
-            connect(m_notifier, &QSocketNotifier::activated, this, &TouchHoldWatcher::readEvents);
-            return true;
+            dev->xMinimum = xInfo.minimum;
+            dev->xMaximum = xInfo.maximum;
+            dev->yMinimum = yInfo.minimum;
+            dev->yMaximum = yInfo.maximum;
+            dev->xSlop = movementSlop(fd, ABS_MT_POSITION_X);
+            dev->ySlop = movementSlop(fd, ABS_MT_POSITION_Y);
+            dev->notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
+            Device *rawDev = dev.get();
+            connect(dev->notifier, &QSocketNotifier::activated, this, [this, rawDev] {
+                readEvents(*rawDev);
+            });
+            m_devices.push_back(std::move(dev));
+        } else {
+            ::close(fd);
         }
-        ::close(fd);
     }
 
-    qCWarning(PlasmaKeyboard) << "TouchHoldWatcher: no readable touchscreen device found";
-    return false;
+    if (m_devices.empty()) {
+        qCWarning(PlasmaKeyboard) << "TouchHoldWatcher: no readable touchscreen device found";
+        return false;
+    }
+    return true;
 }
 
 bool TouchHoldWatcher::arm(int thresholdMs)
 {
-    if (m_fd < 0 && !openTouchscreen()) {
+    openTouchscreens();
+    if (m_devices.empty()) {
         return false;
     }
 
-    // The Wayland activation and evdev fd are separate event sources. Drain
+    // The Wayland activation and evdev fds are separate event sources. Drain
     // evdev here so touchIsDown() is correct even when Wayland happened to be
     // dispatched first for the touch that focused the field.
-    readEvents();
+    for (auto &dev : m_devices) {
+        if (dev->fd >= 0) {
+            readEvents(*dev);
+        }
+    }
 
     m_thresholdMs = thresholdMs;
     m_armed = true;
     m_persistent = false;
-    qCDebug(PlasmaKeyboard) << "TouchHoldWatcher armed, touchscreen fd=" << m_fd << "touchDown=" << m_touchDown;
-    if (m_touchDown && !m_gestureMoved && m_activeSlots.size() <= 1) {
+    if (m_activeDevice && m_activeDevice->touchDown && !m_activeDevice->gestureMoved && m_activeDevice->activeSlots.size() <= 1) {
         m_holdTimer.start(m_thresholdMs);
     }
     return true;
@@ -175,17 +197,22 @@ bool TouchHoldWatcher::isArmed() const
 
 bool TouchHoldWatcher::touchIsDown() const
 {
-    return m_touchDown;
+    return m_activeDevice != nullptr && m_activeDevice->touchDown;
 }
 
 QPointF TouchHoldWatcher::normalizedPosition() const
 {
-    const int xRange = m_xMaximum - m_xMinimum;
-    const int yRange = m_yMaximum - m_yMinimum;
+    const Device *dev = m_activeDevice ? m_activeDevice : m_lastCompletedDevice;
+    if (!dev) {
+        return {};
+    }
+    const int xRange = dev->xMaximum - dev->xMinimum;
+    const int yRange = dev->yMaximum - dev->yMinimum;
     if (xRange <= 0 || yRange <= 0) {
         return {};
     }
-    return QPointF(std::clamp(double(m_x - m_xMinimum) / xRange, 0.0, 1.0), std::clamp(double(m_y - m_yMinimum) / yRange, 0.0, 1.0));
+    return QPointF(std::clamp(double(dev->x - dev->xMinimum) / xRange, 0.0, 1.0),
+                   std::clamp(double(dev->y - dev->yMinimum) / yRange, 0.0, 1.0));
 }
 
 bool TouchHoldWatcher::takeCompletedLongPress(int thresholdMs)
@@ -206,56 +233,62 @@ bool TouchHoldWatcher::takeCompletedLongPress(int thresholdMs)
     return matches;
 }
 
-void TouchHoldWatcher::cancelGesture()
+void TouchHoldWatcher::cancelGesture(Device &dev)
 {
-    m_gestureMoved = true;
-    m_holdTimer.stop();
+    dev.gestureMoved = true;
+    if (m_activeDevice == &dev) {
+        m_holdTimer.stop();
+    }
 }
 
-void TouchHoldWatcher::updatePosition(int code, int value)
+void TouchHoldWatcher::updatePosition(Device &dev, int code, int value)
 {
     if (code == ABS_MT_POSITION_X) {
-        m_x = value;
-        m_currentXValid = true;
-        if (!m_touchDown) {
+        dev.x = value;
+        dev.currentXValid = true;
+        if (!dev.touchDown) {
             return;
         }
-        if (!m_haveX) {
-            m_startX = value;
-            m_haveX = true;
+        if (!dev.haveX) {
+            dev.startX = value;
+            dev.haveX = true;
         }
     } else if (code == ABS_MT_POSITION_Y) {
-        m_y = value;
-        m_currentYValid = true;
-        if (!m_touchDown) {
+        dev.y = value;
+        dev.currentYValid = true;
+        if (!dev.touchDown) {
             return;
         }
-        if (!m_haveY) {
-            m_startY = value;
-            m_haveY = true;
+        if (!dev.haveY) {
+            dev.startY = value;
+            dev.haveY = true;
         }
     }
 
-    if ((m_haveX && std::abs(m_x - m_startX) > m_xSlop) || (m_haveY && std::abs(m_y - m_startY) > m_ySlop)) {
-        cancelGesture();
+    if ((dev.haveX && std::abs(dev.x - dev.startX) > dev.xSlop) || (dev.haveY && std::abs(dev.y - dev.startY) > dev.ySlop)) {
+        cancelGesture(dev);
     }
 }
 
-void TouchHoldWatcher::readEvents()
+void TouchHoldWatcher::readEvents(Device &dev)
 {
     struct input_event events[16];
 
     while (true) {
-        const ssize_t n = ::read(m_fd, events, sizeof(events));
+        const ssize_t n = ::read(dev.fd, events, sizeof(events));
         if (n < 0) {
             if (errno == EAGAIN || errno == EINTR) {
                 break;
             }
             // The device is gone (re-plugged, permissions changed); stop reading.
-            delete m_notifier;
-            m_notifier = nullptr;
-            ::close(m_fd);
-            m_fd = -1;
+            delete dev.notifier;
+            dev.notifier = nullptr;
+            ::close(dev.fd);
+            dev.fd = -1;
+            if (m_activeDevice == &dev) {
+                m_activeDevice = nullptr;
+                m_holdTimer.stop();
+            }
             break;
         }
         if (n == 0) {
@@ -268,18 +301,18 @@ void TouchHoldWatcher::readEvents()
 
             if (ev.type == EV_ABS) {
                 if (ev.code == ABS_MT_SLOT) {
-                    m_currentSlot = ev.value;
+                    dev.currentSlot = ev.value;
                 } else if (ev.code == ABS_MT_TRACKING_ID) {
                     if (ev.value >= 0) {
-                        m_activeSlots.insert(m_currentSlot);
-                        if (m_activeSlots.size() > 1) {
-                            cancelGesture();
+                        dev.activeSlots.insert(dev.currentSlot);
+                        if (dev.activeSlots.size() > 1) {
+                            cancelGesture(dev);
                         }
                     } else {
-                        m_activeSlots.remove(m_currentSlot);
+                        dev.activeSlots.remove(dev.currentSlot);
                     }
                 } else if (ev.code == ABS_MT_POSITION_X || ev.code == ABS_MT_POSITION_Y) {
-                    updatePosition(ev.code, ev.value);
+                    updatePosition(dev, ev.code, ev.value);
                 }
                 continue;
             }
@@ -289,38 +322,40 @@ void TouchHoldWatcher::readEvents()
             }
 
             if (ev.value == 1) {
-                m_touchDown = true;
-                m_gestureMoved = false;
+                dev.touchDown = true;
+                dev.gestureMoved = false;
+                m_activeDevice = &dev;
                 m_completedTouchDurationMs = -1;
                 m_releaseElapsed.invalidate();
-                m_touchElapsed.restart();
-                m_haveX = m_currentXValid;
-                m_haveY = m_currentYValid;
-                m_startX = m_x;
-                m_startY = m_y;
+                dev.touchElapsed.restart();
+                dev.haveX = dev.currentXValid;
+                dev.haveY = dev.currentYValid;
+                dev.startX = dev.x;
+                dev.startY = dev.y;
                 if (m_armed) {
                     m_holdTimer.start(m_thresholdMs);
                 }
             } else if (ev.value == 0) {
-                if (!m_gestureMoved && m_touchElapsed.isValid()) {
-                    m_completedTouchDurationMs = static_cast<int>(m_touchElapsed.elapsed());
+                if (!dev.gestureMoved && dev.touchElapsed.isValid()) {
+                    m_completedTouchDurationMs = static_cast<int>(dev.touchElapsed.elapsed());
                     m_releaseElapsed.restart();
+                    m_lastCompletedDevice = &dev;
                 } else {
                     m_completedTouchDurationMs = -1;
                     m_releaseElapsed.invalidate();
                 }
-                m_touchElapsed.invalidate();
-                m_touchDown = false;
-                m_activeSlots.clear();
-                m_currentXValid = false;
-                m_currentYValid = false;
-                // A one-shot arm belongs only to this touch. Continuous mode
-                // deliberately remains ready: its caller validates each hold
-                // against the focused editable widget's screen rectangle.
-                if (m_persistent) {
-                    m_holdTimer.stop();
-                } else {
-                    disarm();
+                dev.touchElapsed.invalidate();
+                dev.touchDown = false;
+                dev.activeSlots.clear();
+                dev.currentXValid = false;
+                dev.currentYValid = false;
+                if (m_activeDevice == &dev) {
+                    m_activeDevice = nullptr;
+                    if (m_persistent) {
+                        m_holdTimer.stop();
+                    } else {
+                        disarm();
+                    }
                 }
             }
         }

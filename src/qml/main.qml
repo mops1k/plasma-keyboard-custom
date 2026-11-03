@@ -95,7 +95,16 @@ InputPanelWindow {
     //! came from ("complete" — the word being typed, continued; "correct" — the
     //! word being typed, with the typo it may have; "next" — the word that may
     //! follow the previous one) and how much of it would be added to the text.
-    readonly property var predictions: predictor.predictions
+    readonly property var predictions: {
+        if (swipeAlternatives.length > 0) {
+            return swipeAlternatives.map(word => ({
+                "text": word,
+                "kind": "swipe",
+                "completion": 0
+            }));
+        }
+        return predictor.predictions;
+    }
 
     //! The other words the last swipe may have spelled, best first. They take
     //! the place of the suggestions above the keyboard until the person types
@@ -142,24 +151,9 @@ InputPanelWindow {
     }
 
     function updatePredictions() {
-        // Fail closed first: no suggestions at all in sensitive/locked contexts.
-        if (!root.visible || !thing.predictionActive) {
-            predictor.cancel();
-            predictions = [];
-            return;
-        }
-        // The alternatives of the last swipe come first: they belong to the word
-        // that was just inserted, not to the word being typed.
-        if (swipeAlternatives.length > 0) {
-            predictor.cancel();
-            predictions = swipeAlternatives.map(word => ({
-                "text": word,
-                "kind": "swipe",
-                "completion": 0
-            }));
-            return;
-        }
-        if (!PlasmaKeyboardSettings.predictiveTextEnabled) {
+        // Fail closed first: no suggestions at all in sensitive/locked contexts,
+        // when predictive text is disabled, or while swipe alternatives are shown.
+        if (!root.visible || !thing.predictionActive || !PlasmaKeyboardSettings.predictiveTextEnabled || swipeAlternatives.length > 0) {
             predictor.cancel();
             return;
         }

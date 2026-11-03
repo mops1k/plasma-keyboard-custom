@@ -1,5 +1,5 @@
 /*
-    SPDX-FileCopyrightText: 2026 Kristen McWilliam <kristen@kde.org>
+    SPDX-FileCopyrightText: 2026 Chechulin Serhii
 
     SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 */
@@ -11,12 +11,15 @@
 #include <QPointF>
 #include <QSet>
 #include <QTimer>
+#include <memory>
+#include <vector>
 
 class QSocketNotifier;
 
 /**
- * Watches the touchscreen evdev device for touch down/up events.
+ * Watches touchscreen evdev devices for touch down/up events.
  *
+ * Supports multiple connected direct-input touchscreens (e.g. built-in + external).
  * When armed, it emits longPress() once a touch is held down for longer
  * than the configured threshold without moving. An arm is valid for the
  * current touch only; release, movement, or a second contact cancels it.
@@ -53,7 +56,7 @@ public:
 
     bool isArmed() const;
 
-    /// Whether a touch is currently down on the touchscreen.
+    /// Whether a touch is currently down on any touchscreen.
     bool touchIsDown() const;
 
     /** Current touch position, normalised to the touchscreen's axis ranges. */
@@ -70,33 +73,41 @@ Q_SIGNALS:
     void longPress();
 
 private:
-    bool openTouchscreen();
-    void readEvents();
-    void cancelGesture();
-    void updatePosition(int code, int value);
+    struct Device
+    {
+        int fd = -1;
+        QSocketNotifier *notifier = nullptr;
+        QString path;
+        int xMinimum = 0;
+        int xMaximum = 1;
+        int yMinimum = 0;
+        int yMaximum = 1;
+        int xSlop = 1;
+        int ySlop = 1;
+        bool touchDown = false;
+        bool gestureMoved = false;
+        bool currentXValid = false;
+        bool currentYValid = false;
+        bool haveX = false;
+        bool haveY = false;
+        int x = 0;
+        int y = 0;
+        int startX = 0;
+        int startY = 0;
+        int currentSlot = 0;
+        QSet<int> activeSlots;
+        QElapsedTimer touchElapsed;
+    };
 
-    int m_fd = -1;
-    QSocketNotifier *m_notifier = nullptr;
-    bool m_touchDown = false;
+    bool openTouchscreens();
+    void readEvents(Device &dev);
+    void cancelGesture(Device &dev);
+    void updatePosition(Device &dev, int code, int value);
+
+    std::vector<std::unique_ptr<Device>> m_devices;
+    Device *m_activeDevice = nullptr;
+    Device *m_lastCompletedDevice = nullptr;
     bool m_armed = false;
-    bool m_gestureMoved = false;
-    bool m_currentXValid = false;
-    bool m_currentYValid = false;
-    bool m_haveX = false;
-    bool m_haveY = false;
-    int m_x = 0;
-    int m_y = 0;
-    int m_startX = 0;
-    int m_startY = 0;
-    int m_xSlop = 1;
-    int m_ySlop = 1;
-    int m_xMinimum = 0;
-    int m_xMaximum = 1;
-    int m_yMinimum = 0;
-    int m_yMaximum = 1;
-    int m_currentSlot = 0;
-    QSet<int> m_activeSlots;
-    QElapsedTimer m_touchElapsed;
     QElapsedTimer m_releaseElapsed;
     int m_completedTouchDurationMs = -1;
     bool m_persistent = false;
