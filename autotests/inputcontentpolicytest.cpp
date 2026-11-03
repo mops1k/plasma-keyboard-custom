@@ -36,8 +36,7 @@ private Q_SLOTS:
         QFETCH(int, hint);
         QFETCH(int, purpose);
         QFETCH(bool, allowed);
-        QCOMPARE(InputContentPolicy::predictionsAllowed(hasContext, typeKnown,
-                     InputPlugin::ContentHint(hint), InputPlugin::ContentPurpose(purpose)), allowed);
+        QCOMPARE(InputContentPolicy::predictionsAllowed(hasContext, typeKnown, InputPlugin::ContentHint(hint), InputPlugin::ContentPurpose(purpose)), allowed);
     }
 
     void passwordQtHints()

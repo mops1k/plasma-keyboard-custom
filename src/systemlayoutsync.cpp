@@ -27,12 +27,8 @@ QDBusMessage layoutsCall(const QString &method)
 SystemLayoutSync::SystemLayoutSync(QObject *parent)
     : QObject(parent)
 {
-    QDBusConnection::sessionBus().connect(QLatin1String(s_service),
-                                          QLatin1String(s_path),
-                                          QLatin1String(s_iface),
-                                          QStringLiteral("layoutChanged"),
-                                          this,
-                                          SLOT(onLayoutChanged(uint)));
+    QDBusConnection::sessionBus()
+        .connect(QLatin1String(s_service), QLatin1String(s_path), QLatin1String(s_iface), QStringLiteral("layoutChanged"), this, SLOT(onLayoutChanged(uint)));
 }
 
 QStringList SystemLayoutSync::layouts() const

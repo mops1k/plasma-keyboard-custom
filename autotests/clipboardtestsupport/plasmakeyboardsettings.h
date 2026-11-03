@@ -13,7 +13,10 @@ public:
         static PlasmaKeyboardSettings settings;
         return &settings;
     }
-    bool clipboardEnabled() const { return m_enabled; }
+    bool clipboardEnabled() const
+    {
+        return m_enabled;
+    }
     void setClipboardEnabled(bool enabled)
     {
         if (enabled != m_enabled) {
@@ -23,6 +26,7 @@ public:
     }
 Q_SIGNALS:
     void clipboardEnabledChanged();
+
 private:
     bool m_enabled = true;
 };

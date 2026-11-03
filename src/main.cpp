@@ -8,14 +8,14 @@
 #include "config-plasma-keyboard.h"
 #include "inputlisteneritem.h"
 #include "inputpanelintegration.h"
+#include "keyboardroleprivacy.h"
+#include "keyboardvisibilitystate.h"
 #include "layoutpathhelper.h"
 #include "logging.h"
+#include "panelstubgeometry.h"
 #include "plasmakeyboardsettings.h"
 #include "restartwatcher.h"
 #include "sessionlockstate.h"
-#include "panelstubgeometry.h"
-#include "keyboardroleprivacy.h"
-#include "keyboardvisibilitystate.h"
 #include "settingsreloader.h"
 #include "sttmanager.h"
 #include "systemlayoutsync.h"
@@ -54,9 +54,9 @@
 #include <QTimer>
 #include <QVariantMap>
 #include <QWindow>
-#include <qpa/qwindowsysteminterface.h>
 #include <QtWaylandClient/QWaylandClientExtensionTemplate>
 #include <QtWaylandClient/private/qwaylandwindow_p.h>
+#include <qpa/qwindowsysteminterface.h>
 
 #include <qwayland-kde-lockscreen-overlay-v1.h>
 
@@ -342,8 +342,7 @@ public:
         m_outputRelocationTimer.setSingleShot(true);
         m_outputRelocationTimer.setInterval(100);
         connect(&m_outputRelocationTimer, &QTimer::timeout, this, [this]() {
-            if (!m_keyboard || !m_keyboard->isVisible() || !m_stub || m_lockState.isPreparingLock()
-                || m_keyboard->screen() == m_stub->screen()) {
+            if (!m_keyboard || !m_keyboard->isVisible() || !m_stub || m_lockState.isPreparingLock() || m_keyboard->screen() == m_stub->screen()) {
                 return;
             }
             // A layer-shell role cannot change its output after creation.
@@ -673,8 +672,8 @@ public:
         // activation. Never classify a compositor hide as a local user action.
         connect(QGuiApplication::inputMethod(), &QInputMethod::visibleChanged, this, [this] {
             const auto *lock = SessionLockState::instance();
-            if (!m_applyingCompositorVisibility && !QGuiApplication::inputMethod()->isVisible()
-                && lock->isKnown() && lock->isLocked() && !lock->isPreparingLock() && m_bridge && m_bridge->kwinVisible()) {
+            if (!m_applyingCompositorVisibility && !QGuiApplication::inputMethod()->isVisible() && lock->isKnown() && lock->isLocked()
+                && !lock->isPreparingLock() && m_bridge && m_bridge->kwinVisible()) {
                 // KWin exposes no hide method. Mode Never invokes hide(); the normal
                 // visible=false handler restores the configured mode afterwards.
                 setKwinMode(0);
@@ -725,8 +724,11 @@ public Q_SLOTS:
     {
         const bool compositorVisible = kwinVisible();
         const auto *lock = SessionLockState::instance();
-        const auto visibilityChange = m_visibility.update(compositorVisible, lock->isKnown(), lock->isLocked(), lock->isPreparingLock(),
-                                                         PlasmaKeyboardSettings::self()->hideOnInputFocusLoss());
+        const auto visibilityChange = m_visibility.update(compositorVisible,
+                                                          lock->isKnown(),
+                                                          lock->isLocked(),
+                                                          lock->isPreparingLock(),
+                                                          PlasmaKeyboardSettings::self()->hideOnInputFocusLoss());
         const bool keyboardVisible = m_visibility.compositorVisible();
         // KWin stops treating the keyboard as shown as soon as the text input
         // goes away, but with hideOnInputFocusLoss off the visible window stays
@@ -1037,7 +1039,9 @@ int main(int argc, char **argv)
                 const bool locked = lock->isKnown() && lock->isLocked();
                 const QVariant oldRole = window->property("plasmaKeyboardRoleLocked");
                 const auto action = keyboardRoleAction(oldRole.isValid() ? std::optional<bool>(oldRole.toBool()) : std::nullopt,
-                                                       lock->isKnown(), lock->isLocked(), window->property("plasmaKeyboardRoleAuthorized").toBool(),
+                                                       lock->isKnown(),
+                                                       lock->isLocked(),
+                                                       window->property("plasmaKeyboardRoleAuthorized").toBool(),
                                                        window->property("plasmaKeyboardRoleAuthorizationAttempted").toBool());
                 if (action == KeyboardRoleAction::Recreate) {
                     // Never authorize a desktop surface whose last buffer may
@@ -1065,14 +1069,11 @@ int main(int argc, char **argv)
             // completes QWindow::show() synchronously. This callback therefore
             // runs after LayerShellQt has created the role but before control
             // returns to the event loop and KWin can map its first buffer.
-            QObject::connect(QGuiApplication::inputMethod(),
-                             &QInputMethod::visibleChanged,
-                             window,
-                             [authorizeKeyboardRole]() {
-                                 if (QGuiApplication::inputMethod()->isVisible()) {
-                                     authorizeKeyboardRole();
-                                 }
-                             });
+            QObject::connect(QGuiApplication::inputMethod(), &QInputMethod::visibleChanged, window, [authorizeKeyboardRole]() {
+                if (QGuiApplication::inputMethod()->isVisible()) {
+                    authorizeKeyboardRole();
+                }
+            });
 
             QObject::connect(window, &QWindow::visibleChanged, window, [window, authorizeKeyboardRole](bool visible) {
                 // visibleChanged(true) precedes platformWindow->setVisible(true):

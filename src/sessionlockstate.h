@@ -16,10 +16,22 @@ public:
     explicit SessionLockState(QObject *parent = nullptr);
     explicit SessionLockState(const QDBusConnection &bus, QObject *parent = nullptr);
 
-    bool isKnown() const { return m_known; }
-    bool isLocked() const { return m_locked; }
-    bool isPreparingLock() const { return m_preparingLock; }
-    bool allowsPredictions() const { return m_known && !m_locked; }
+    bool isKnown() const
+    {
+        return m_known;
+    }
+    bool isLocked() const
+    {
+        return m_locked;
+    }
+    bool isPreparingLock() const
+    {
+        return m_preparingLock;
+    }
+    bool allowsPredictions() const
+    {
+        return m_known && !m_locked;
+    }
 
 Q_SIGNALS:
     void stateChanged();

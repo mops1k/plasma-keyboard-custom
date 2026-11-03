@@ -39,8 +39,7 @@ ClipboardHistory::ClipboardHistory(SessionLockState *lockState, const QDBusConne
     , m_lockState(lockState)
 {
     Q_ASSERT(m_lockState);
-    m_bus.connect(QLatin1String(service), QLatin1String(path), QLatin1String(interface),
-                  QStringLiteral("clipboardHistoryUpdated"), this, SLOT(refresh()));
+    m_bus.connect(QLatin1String(service), QLatin1String(path), QLatin1String(interface), QStringLiteral("clipboardHistoryUpdated"), this, SLOT(refresh()));
     m_pollTimer.setInterval(pollIntervalMs);
     connect(&m_pollTimer, &QTimer::timeout, this, &ClipboardHistory::refresh);
     connect(PlasmaKeyboardSettings::self(), &PlasmaKeyboardSettings::clipboardEnabledChanged, this, &ClipboardHistory::updateEnabled);

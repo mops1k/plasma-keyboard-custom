@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 plasma-keyboard-custom contributors
 // SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
+#include "overlaycontroller.h"
 #include "inputplugin.h"
 #include "logging.h"
-#include "overlaycontroller.h"
 #include <QTest>
 
 Q_LOGGING_CATEGORY(PlasmaKeyboard, "overlaycontrollertest")
@@ -10,11 +10,25 @@ Q_LOGGING_CATEGORY(PlasmaKeyboard, "overlaycontrollertest")
 class HoldTrigger : public OverlayTrigger
 {
 public:
-    QString triggerId() const override { return QStringLiteral("hold"); }
-    QString displayName() const override { return triggerId(); }
-    bool isEnabled() const override { return true; }
-    void reset() override {}
-    QStringList candidates(const QString &) const override { return {QStringLiteral("à")}; }
+    QString triggerId() const override
+    {
+        return QStringLiteral("hold");
+    }
+    QString displayName() const override
+    {
+        return triggerId();
+    }
+    bool isEnabled() const override
+    {
+        return true;
+    }
+    void reset() override
+    {
+    }
+    QStringList candidates(const QString &) const override
+    {
+        return {QStringLiteral("à")};
+    }
     OverlayTriggerResult processEvent(OverlayInputEvent type, const QKeyEvent *key, const QString &, OverlayController *) override
     {
         OverlayTriggerResult result;

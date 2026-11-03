@@ -41,7 +41,9 @@ private Q_SLOTS:
 
         int ticks = 0;
         QTimer timer;
-        connect(&timer, &QTimer::timeout, this, [&] { ++ticks; });
+        connect(&timer, &QTimer::timeout, this, [&] {
+            ++ticks;
+        });
         timer.start(1);
         for (int i = 0; i < 100; ++i) {
             predictor.request(QStringLiteral("discard%1").arg(i), {}, QStringLiteral("en_US"), 5, 2, true, true);

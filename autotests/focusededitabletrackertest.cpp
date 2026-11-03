@@ -16,7 +16,9 @@
 
 Q_LOGGING_CATEGORY(PlasmaKeyboard, "focusededitabletrackertest")
 
-struct Bounds { int x = 0, y = 0, width = 100, height = 100; };
+struct Bounds {
+    int x = 0, y = 0, width = 100, height = 100;
+};
 Q_DECLARE_METATYPE(Bounds)
 QDBusArgument &operator<<(QDBusArgument &arg, const Bounds &bounds)
 {
@@ -43,7 +45,10 @@ public:
     int addressDelay = 0;
     int registrationDelay = 0;
 
-    QString introspect(const QString &) const override { return {}; }
+    QString introspect(const QString &) const override
+    {
+        return {};
+    }
     bool handleMessage(const QDBusMessage &message, const QDBusConnection &connection) override
     {
         const QString method = message.member();
@@ -104,8 +109,8 @@ private Q_SLOTS:
         }
         qDBusRegisterMetaType<Bounds>();
         qDBusRegisterMetaType<QList<uint>>();
-        m_serviceBus = std::make_unique<QDBusConnection>(QDBusConnection::connectToBus(
-            QString::fromLocal8Bit(qgetenv("DBUS_SESSION_BUS_ADDRESS")), QStringLiteral("tracker-test-service")));
+        m_serviceBus = std::make_unique<QDBusConnection>(
+            QDBusConnection::connectToBus(QString::fromLocal8Bit(qgetenv("DBUS_SESSION_BUS_ADDRESS")), QStringLiteral("tracker-test-service")));
         QVERIFY(m_serviceBus->isConnected());
         QVERIFY(m_serviceBus->registerService(QStringLiteral("org.a11y.Bus")));
         QVERIFY(m_serviceBus->registerService(QStringLiteral("org.a11y.atspi.Registry")));
@@ -132,7 +137,9 @@ private Q_SLOTS:
         FocusedEditableTracker tracker;
         QVERIFY(elapsed.elapsed() < 200);
         bool heartbeat = false;
-        QTimer::singleShot(20, &tracker, [&] { heartbeat = true; });
+        QTimer::singleShot(20, &tracker, [&] {
+            heartbeat = true;
+        });
         QTRY_VERIFY(heartbeat);
         QCOMPARE(m_service->registrations, 0);
         QTRY_COMPARE(m_service->registrations, 1);
@@ -153,7 +160,9 @@ private Q_SLOTS:
         QVERIFY(responsiveness.elapsed() < 250);
         int heartbeats = 0;
         QTimer heartbeat;
-        connect(&heartbeat, &QTimer::timeout, this, [&] { ++heartbeats; });
+        connect(&heartbeat, &QTimer::timeout, this, [&] {
+            ++heartbeats;
+        });
         heartbeat.start(10);
         QTest::qWait(100);
         QVERIFY(heartbeats >= 3);
@@ -173,8 +182,10 @@ private Q_SLOTS:
     void staleReplies()
     {
         QFETCH(bool, delayState);
-        if (delayState) m_service->stateDelay[QStringLiteral("/old")] = 300;
-        else m_service->extentsDelay[QStringLiteral("/old")] = 300;
+        if (delayState)
+            m_service->stateDelay[QStringLiteral("/old")] = 300;
+        else
+            m_service->extentsDelay[QStringLiteral("/old")] = 300;
         FocusedEditableTracker tracker(QDBusConnection::sessionBus());
         QTRY_COMPARE(m_service->registrations, 1);
         focus(QStringLiteral("/old"));
@@ -185,7 +196,8 @@ private Q_SLOTS:
         QTest::qWait(400);
         QVERIFY(tracker.containsNormalizedTouch(touch(450, 50)));
         QVERIFY(!tracker.containsNormalizedTouch(touch(50, 50)));
-        if (delayState) QVERIFY(!m_service->requests.contains(QStringLiteral("/old:GetExtents")));
+        if (delayState)
+            QVERIFY(!m_service->requests.contains(QStringLiteral("/old:GetExtents")));
     }
     void blurInvalidatesPendingReply()
     {
@@ -211,8 +223,10 @@ private Q_SLOTS:
         QTRY_COMPARE(m_service->registrations, 1);
         focus(QStringLiteral("/old"));
         QTRY_VERIFY(tracker.containsNormalizedTouch(touch(50, 50)));
-        if (fail) m_service->errors.insert(QStringLiteral("/new"));
-        else m_service->nonEditable.insert(QStringLiteral("/new"));
+        if (fail)
+            m_service->errors.insert(QStringLiteral("/new"));
+        else
+            m_service->nonEditable.insert(QStringLiteral("/new"));
         focus(QStringLiteral("/new"));
         QTRY_VERIFY(m_service->requests.contains(QStringLiteral("/new:GetState")));
         QVERIFY(!tracker.containsNormalizedTouch(touch(50, 50)));

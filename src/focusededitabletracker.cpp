@@ -67,9 +67,9 @@ FocusedEditableTracker::FocusedEditableTracker(QObject *parent)
     // QDBusInterface construction can itself introspect synchronously. Use raw
     // messages throughout, including discovery, registration and teardown.
     const auto request = QDBusMessage::createMethodCall(QStringLiteral("org.a11y.Bus"),
-                                                       QStringLiteral("/org/a11y/bus"),
-                                                       QStringLiteral("org.a11y.Bus"),
-                                                       QStringLiteral("GetAddress"));
+                                                        QStringLiteral("/org/a11y/bus"),
+                                                        QStringLiteral("org.a11y.Bus"),
+                                                        QStringLiteral("GetAddress"));
     auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(request, requestTimeoutMs), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *pending) {
         const QDBusPendingReply<QString> address = *pending;
@@ -103,7 +103,7 @@ void FocusedEditableTracker::initialize(const QDBusConnection &bus)
                         QStringLiteral("org.a11y.atspi.Event.Object"),
                         QStringLiteral("StateChanged"),
                         this,
-                        SLOT(stateChanged(QString,int,int,QDBusVariant,QVariantMap,QDBusMessage)))) {
+                        SLOT(stateChanged(QString, int, int, QDBusVariant, QVariantMap, QDBusMessage)))) {
         m_bus.reset();
         return;
     }
@@ -118,9 +118,12 @@ void FocusedEditableTracker::initialize(const QDBusConnection &bus)
             ++m_focusGeneration;
             m_focusedEditableRect = {};
             if (m_bus) {
-                m_bus->disconnect(QString(), QString(), QStringLiteral("org.a11y.atspi.Event.Object"),
-                                  QStringLiteral("StateChanged"), this,
-                                  SLOT(stateChanged(QString,int,int,QDBusVariant,QVariantMap,QDBusMessage)));
+                m_bus->disconnect(QString(),
+                                  QString(),
+                                  QStringLiteral("org.a11y.atspi.Event.Object"),
+                                  QStringLiteral("StateChanged"),
+                                  this,
+                                  SLOT(stateChanged(QString, int, int, QDBusVariant, QVariantMap, QDBusMessage)));
             }
             m_bus.reset();
         }
@@ -147,12 +150,7 @@ bool FocusedEditableTracker::containsNormalizedTouch(const QPointF &position) co
     return screen && m_focusedEditableRect.isValid() && m_focusedEditableRect.contains(mapTouchToScreen(position, screen).toPoint());
 }
 
-void FocusedEditableTracker::stateChanged(const QString &state,
-                                          int enabled,
-                                          int,
-                                          const QDBusVariant &,
-                                          const QVariantMap &,
-                                          const QDBusMessage &message)
+void FocusedEditableTracker::stateChanged(const QString &state, int enabled, int, const QDBusVariant &, const QVariantMap &, const QDBusMessage &message)
 {
     if (state.compare(QStringLiteral("focused"), Qt::CaseInsensitive) != 0 || !m_bus) {
         return;
@@ -174,15 +172,13 @@ void FocusedEditableTracker::stateChanged(const QString &state,
     m_focusedService = message.service();
     m_focusedPath = message.path();
     m_focusedEditableRect = {};
-    const auto request = QDBusMessage::createMethodCall(m_focusedService, m_focusedPath,
-                                                       QStringLiteral("org.a11y.atspi.Accessible"),
-                                                       QStringLiteral("GetState"));
+    const auto request =
+        QDBusMessage::createMethodCall(m_focusedService, m_focusedPath, QStringLiteral("org.a11y.atspi.Accessible"), QStringLiteral("GetState"));
     auto *watcher = new QDBusPendingCallWatcher(m_bus->asyncCall(request, requestTimeoutMs), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, generation](QDBusPendingCallWatcher *pending) {
         const QDBusMessage reply = pending->reply();
         pending->deleteLater();
-        if (!m_bus || generation != m_focusGeneration || reply.type() != QDBusMessage::ReplyMessage
-            || reply.signature() != QLatin1String("au")) {
+        if (!m_bus || generation != m_focusGeneration || reply.type() != QDBusMessage::ReplyMessage || reply.signature() != QLatin1String("au")) {
             return;
         }
         QList<uint> states;
@@ -192,16 +188,14 @@ void FocusedEditableTracker::stateChanged(const QString &state,
             return;
         }
 
-        auto request = QDBusMessage::createMethodCall(m_focusedService, m_focusedPath,
-                                                     QStringLiteral("org.a11y.atspi.Component"),
-                                                     QStringLiteral("GetExtents"));
+        auto request =
+            QDBusMessage::createMethodCall(m_focusedService, m_focusedPath, QStringLiteral("org.a11y.atspi.Component"), QStringLiteral("GetExtents"));
         request << screenCoordinates;
         auto *extentsWatcher = new QDBusPendingCallWatcher(m_bus->asyncCall(request, requestTimeoutMs), this);
         connect(extentsWatcher, &QDBusPendingCallWatcher::finished, this, [this, generation](QDBusPendingCallWatcher *pending) {
             const QDBusMessage reply = pending->reply();
             pending->deleteLater();
-            if (!m_bus || generation != m_focusGeneration || reply.type() != QDBusMessage::ReplyMessage
-                || reply.signature() != QLatin1String("(iiii)")) {
+            if (!m_bus || generation != m_focusGeneration || reply.type() != QDBusMessage::ReplyMessage || reply.signature() != QLatin1String("(iiii)")) {
                 return;
             }
 

@@ -68,7 +68,8 @@ Window {
         }
     }
 }
-)", QUrl::fromLocalFile(QStringLiteral(LOCKSCREEN_TEST_SOURCE_DIR "/focus-harness.qml")));
+)",
+                          QUrl::fromLocalFile(QStringLiteral(LOCKSCREEN_TEST_SOURCE_DIR "/focus-harness.qml")));
         QVERIFY2(!component.isError(), qPrintable(component.errorString()));
         std::unique_ptr<QQuickWindow> a(qobject_cast<QQuickWindow *>(component.create()));
         QVERIFY2(a, qPrintable(component.errorString()));

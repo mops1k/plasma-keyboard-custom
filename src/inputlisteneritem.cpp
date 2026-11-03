@@ -13,12 +13,12 @@
 #include "plasmakeyboardsettings.h"
 #include "touchholdwatcher.h"
 
+#include "inputcontentpolicy.h"
 #include "overlay/longpresstrigger.h"
 #include "overlay/overlaycontroller.h"
 #include "overlay/prefixquerytrigger.h"
 #include "overlay/textexpansiontrigger.h"
 #include "prediction/wordatcursor.h"
-#include "inputcontentpolicy.h"
 
 #include <QDBusConnection>
 #include <QDBusMessage>

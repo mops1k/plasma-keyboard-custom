@@ -47,8 +47,8 @@ public:
     ~AsyncPredictor() override;
 
     QVariantList predictions() const;
-    Q_INVOKABLE void request(const QString &prefix, const QString &context, const QString &locale,
-                             int limit, int minPrefixLength, bool correction, bool nextWord);
+    Q_INVOKABLE void
+    request(const QString &prefix, const QString &context, const QString &locale, int limit, int minPrefixLength, bool correction, bool nextWord);
     Q_INVOKABLE void cancel();
 
 Q_SIGNALS:

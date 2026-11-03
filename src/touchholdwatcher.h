@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include <QObject>
 #include <QElapsedTimer>
+#include <QObject>
 #include <QPointF>
 #include <QSet>
 #include <QTimer>

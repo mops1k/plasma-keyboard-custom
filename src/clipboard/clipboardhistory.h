@@ -26,7 +26,9 @@ class ClipboardHistory : public QAbstractListModel
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
 
 public:
-    enum Role { TextRole = Qt::UserRole + 1 };
+    enum Role {
+        TextRole = Qt::UserRole + 1
+    };
     explicit ClipboardHistory(SessionLockState *lockState, QObject *parent = nullptr);
     ClipboardHistory(SessionLockState *lockState, const QDBusConnection &bus, QObject *parent = nullptr);
 

@@ -21,7 +21,10 @@ public:
     int clears = 0;
     int delay = 0;
     QStringList entries;
-    QString introspect(const QString &) const override { return {}; }
+    QString introspect(const QString &) const override
+    {
+        return {};
+    }
     bool handleMessage(const QDBusMessage &message, const QDBusConnection &bus) override
     {
         QVariantList values;
@@ -38,7 +41,9 @@ public:
         } else {
             return false;
         }
-        QTimer::singleShot(replyDelay, this, [message, bus, values] { bus.send(message.createReply(values)); });
+        QTimer::singleShot(replyDelay, this, [message, bus, values] {
+            bus.send(message.createReply(values));
+        });
         return true;
     }
 };
@@ -52,13 +57,15 @@ class ClipboardHistoryTest : public QObject
     void lock(bool active)
     {
         m_service->locked = active;
-        auto signal = QDBusMessage::createSignal(QStringLiteral("/ScreenSaver"), QStringLiteral("org.freedesktop.ScreenSaver"), QStringLiteral("ActiveChanged"));
+        auto signal =
+            QDBusMessage::createSignal(QStringLiteral("/ScreenSaver"), QStringLiteral("org.freedesktop.ScreenSaver"), QStringLiteral("ActiveChanged"));
         signal << active;
         QVERIFY(m_serviceBus->send(signal));
     }
     void historySignal()
     {
-        QVERIFY(m_serviceBus->send(QDBusMessage::createSignal(QStringLiteral("/klipper"), QStringLiteral("org.kde.klipper.klipper"), QStringLiteral("clipboardHistoryUpdated"))));
+        QVERIFY(m_serviceBus->send(
+            QDBusMessage::createSignal(QStringLiteral("/klipper"), QStringLiteral("org.kde.klipper.klipper"), QStringLiteral("clipboardHistoryUpdated"))));
     }
 
 private Q_SLOTS:
@@ -154,7 +161,9 @@ private Q_SLOTS:
         model.setAccessAllowed(true);
         QTRY_COMPARE(m_service->reads, 1);
         bool eventLoopResponsive = false;
-        QTimer::singleShot(0, this, [&] { eventLoopResponsive = true; });
+        QTimer::singleShot(0, this, [&] {
+            eventLoopResponsive = true;
+        });
         QTRY_VERIFY(eventLoopResponsive);
         lock(true);
         QTRY_VERIFY(state.isLocked());

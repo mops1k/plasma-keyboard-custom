@@ -18,7 +18,10 @@ public:
     bool active = false;
     int delay = 0;
     int requests = 0;
-    QString introspect(const QString &) const override { return {}; }
+    QString introspect(const QString &) const override
+    {
+        return {};
+    }
     bool handleMessage(const QDBusMessage &message, const QDBusConnection &connection) override
     {
         if (message.member() != QLatin1String("GetActive")) {
@@ -42,7 +45,8 @@ class SessionLockStateTest : public QObject
     void change(bool active)
     {
         m_service->active = active;
-        auto signal = QDBusMessage::createSignal(QStringLiteral("/ScreenSaver"), QStringLiteral("org.freedesktop.ScreenSaver"), QStringLiteral("ActiveChanged"));
+        auto signal =
+            QDBusMessage::createSignal(QStringLiteral("/ScreenSaver"), QStringLiteral("org.freedesktop.ScreenSaver"), QStringLiteral("ActiveChanged"));
         signal << active;
         QVERIFY(m_bus->send(signal));
     }
@@ -87,8 +91,12 @@ private Q_SLOTS:
         QVERIFY(state.isLocked());
         QVERIFY(!state.allowsPredictions());
         QStringList signals;
-        connect(&state, &SessionLockState::unlocked, this, [&] { signals << QStringLiteral("hide"); });
-        connect(&state, &SessionLockState::stateChanged, this, [&] { signals << QStringLiteral("refresh"); });
+        connect(&state, &SessionLockState::unlocked, this, [&] {
+            signals << QStringLiteral("hide");
+        });
+        connect(&state, &SessionLockState::stateChanged, this, [&] {
+            signals << QStringLiteral("refresh");
+        });
         change(false);
         QTRY_VERIFY(!state.isLocked());
         QCOMPARE(signals, QStringList({QStringLiteral("hide"), QStringLiteral("refresh")}));

@@ -5,7 +5,12 @@
 #pragma once
 #include <optional>
 
-enum class KeyboardRoleAction { KeepUnprivileged, KeepAuthorized, AuthorizeRestricted, Recreate };
+enum class KeyboardRoleAction {
+    KeepUnprivileged,
+    KeepAuthorized,
+    AuthorizeRestricted,
+    Recreate
+};
 
 inline KeyboardRoleAction keyboardRoleAction(std::optional<bool> previousLocked, bool known, bool locked, bool authorized, bool attempted = false)
 {

@@ -31,12 +31,9 @@ SessionLockState::SessionLockState(const QDBusConnection &bus, QObject *parent)
     : QObject(parent)
     , m_bus(bus)
 {
-    m_bus.connect(QLatin1String(service), QLatin1String(path), QLatin1String(interface),
-                  QStringLiteral("ActiveChanged"), this, SLOT(activeChanged(bool)));
-    m_bus.connect(QLatin1String(service), QLatin1String(path), QStringLiteral("org.kde.screensaver"),
-                  QStringLiteral("AboutToLock"), this, SLOT(aboutToLock()));
-    auto *watcher = new QDBusServiceWatcher(QLatin1String(service), m_bus,
-                                           QDBusServiceWatcher::WatchForOwnerChange, this);
+    m_bus.connect(QLatin1String(service), QLatin1String(path), QLatin1String(interface), QStringLiteral("ActiveChanged"), this, SLOT(activeChanged(bool)));
+    m_bus.connect(QLatin1String(service), QLatin1String(path), QStringLiteral("org.kde.screensaver"), QStringLiteral("AboutToLock"), this, SLOT(aboutToLock()));
+    auto *watcher = new QDBusServiceWatcher(QLatin1String(service), m_bus, QDBusServiceWatcher::WatchForOwnerChange, this);
     connect(watcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &SessionLockState::ownerChanged);
     query();
 }
@@ -44,8 +41,7 @@ SessionLockState::SessionLockState(const QDBusConnection &bus, QObject *parent)
 void SessionLockState::query()
 {
     const quint64 generation = ++m_generation;
-    const auto request = QDBusMessage::createMethodCall(QLatin1String(service), QLatin1String(path),
-                                                       QLatin1String(interface), QStringLiteral("GetActive"));
+    const auto request = QDBusMessage::createMethodCall(QLatin1String(service), QLatin1String(path), QLatin1String(interface), QStringLiteral("GetActive"));
     auto *pending = new QDBusPendingCallWatcher(m_bus.asyncCall(request, 1000), this);
     connect(pending, &QDBusPendingCallWatcher::finished, this, [this, generation](QDBusPendingCallWatcher *call) {
         const auto reply = call->reply();

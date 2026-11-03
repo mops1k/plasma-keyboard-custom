@@ -18,8 +18,7 @@ UinputKeyboard::UinputKeyboard()
 {
     m_fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if (m_fd < 0) {
-        qCWarning(PlasmaKeyboard) << "Could not open /dev/uinput, Meta shortcuts will not reach the compositor's global shortcuts:"
-                                   << strerror(errno);
+        qCWarning(PlasmaKeyboard) << "Could not open /dev/uinput, Meta shortcuts will not reach the compositor's global shortcuts:" << strerror(errno);
         return;
     }
 
@@ -49,7 +48,7 @@ UinputKeyboard::UinputKeyboard()
 
     if (ioctl(m_fd, UI_DEV_SETUP, &setup) < 0 || ioctl(m_fd, UI_DEV_CREATE) < 0) {
         qCWarning(PlasmaKeyboard) << "Could not create the uinput virtual keyboard, Meta shortcuts will not reach the compositor's global shortcuts:"
-                                   << strerror(errno);
+                                  << strerror(errno);
         close(m_fd);
         m_fd = -1;
     }

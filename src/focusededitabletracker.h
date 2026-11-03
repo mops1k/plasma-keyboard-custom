@@ -36,12 +36,7 @@ public:
     bool containsNormalizedTouch(const QPointF &position) const;
 
 private Q_SLOTS:
-    void stateChanged(const QString &state,
-                      int enabled,
-                      int detail,
-                      const QDBusVariant &data,
-                      const QVariantMap &properties,
-                      const QDBusMessage &message);
+    void stateChanged(const QString &state, int enabled, int detail, const QDBusVariant &data, const QVariantMap &properties, const QDBusMessage &message);
 
 private:
     void initialize(const QDBusConnection &bus);

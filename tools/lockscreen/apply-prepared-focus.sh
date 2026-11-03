@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 plasma-keyboard-custom contributors
 # SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 # Explicit interactive installation only. Never invoked by the RPM or daemon.
 set -euo pipefail

@@ -185,8 +185,7 @@ QPointF TouchHoldWatcher::normalizedPosition() const
     if (xRange <= 0 || yRange <= 0) {
         return {};
     }
-    return QPointF(std::clamp(double(m_x - m_xMinimum) / xRange, 0.0, 1.0),
-                   std::clamp(double(m_y - m_yMinimum) / yRange, 0.0, 1.0));
+    return QPointF(std::clamp(double(m_x - m_xMinimum) / xRange, 0.0, 1.0), std::clamp(double(m_y - m_yMinimum) / yRange, 0.0, 1.0));
 }
 
 bool TouchHoldWatcher::takeCompletedLongPress(int thresholdMs)
@@ -198,8 +197,7 @@ bool TouchHoldWatcher::takeCompletedLongPress(int thresholdMs)
     // should not make event-loop scheduling impossible or retain a gesture for
     // several seconds.
     const int maximumActivationDelayMs = std::clamp(thresholdMs / 2, 50, 250);
-    const bool matches = m_completedTouchDurationMs >= thresholdMs && m_releaseElapsed.isValid()
-        && m_releaseElapsed.elapsed() <= maximumActivationDelayMs;
+    const bool matches = m_completedTouchDurationMs >= thresholdMs && m_releaseElapsed.isValid() && m_releaseElapsed.elapsed() <= maximumActivationDelayMs;
     m_completedTouchDurationMs = -1;
     m_releaseElapsed.invalidate();
     if (matches) {

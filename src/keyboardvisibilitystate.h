@@ -9,8 +9,14 @@
 class KeyboardVisibilityState
 {
 public:
-    void afterUnlock() { m_waitForHide = true; }
-    bool compositorVisible() const { return m_lastVisible; }
+    void afterUnlock()
+    {
+        m_waitForHide = true;
+    }
+    bool compositorVisible() const
+    {
+        return m_lastVisible;
+    }
 
     std::optional<bool> update(bool visible, bool known, bool locked, bool preparing, bool hideOnFocusLoss)
     {

@@ -10,14 +10,12 @@ namespace InputContentPolicy
 {
 inline bool sensitive(InputPlugin::ContentHint hint, InputPlugin::ContentPurpose purpose)
 {
-    return (hint & (InputPlugin::content_hint_hidden_text | InputPlugin::content_hint_sensitive_data))
-        || purpose == InputPlugin::content_purpose_password;
+    return (hint & (InputPlugin::content_hint_hidden_text | InputPlugin::content_hint_sensitive_data)) || purpose == InputPlugin::content_purpose_password;
 }
 
 // New contexts are untrusted until the compositor supplies their content type.
 // This check must precede reading/extracting text, not just showing candidates.
-inline bool predictionsAllowed(bool hasContext, bool contentTypeKnown,
-                               InputPlugin::ContentHint hint, InputPlugin::ContentPurpose purpose)
+inline bool predictionsAllowed(bool hasContext, bool contentTypeKnown, InputPlugin::ContentHint hint, InputPlugin::ContentPurpose purpose)
 {
     return hasContext && contentTypeKnown && !sensitive(hint, purpose);
 }

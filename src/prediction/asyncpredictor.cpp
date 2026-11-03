@@ -105,8 +105,13 @@ void AsyncPredictor::cancel()
     clear();
 }
 
-void AsyncPredictor::request(const QString &prefix, const QString &context, const QString &locale,
-                             int limit, int minPrefixLength, bool correction, bool nextWord)
+void AsyncPredictor::request(const QString &prefix,
+                             const QString &context,
+                             const QString &locale,
+                             int limit,
+                             int minPrefixLength,
+                             bool correction,
+                             bool nextWord)
 {
     cancel();
     m_typedLength = prefix.size();
@@ -125,9 +130,12 @@ void AsyncPredictor::dispatch(const Request &request)
 {
     m_busy = true;
     const auto generation = m_generation;
-    QMetaObject::invokeMethod(m_worker, [worker = m_worker, generation, request] {
-        worker->run(generation, request);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        m_worker,
+        [worker = m_worker, generation, request] {
+            worker->run(generation, request);
+        },
+        Qt::QueuedConnection);
 }
 
 void AsyncPredictor::finished(quint64 generation, const QStringList &words, const QString &kind)
