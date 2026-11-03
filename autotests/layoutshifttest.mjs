@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 // Source-binding regression test, not a Qt/KWin input integration test.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import vm from "node:vm";
 
 const english = [
@@ -77,8 +77,16 @@ function rows(source) {
     return result;
 }
 const layouts = ["fallback", "uk_UA"].map(locale => rows(readFileSync(new URL(`../src/layouts/${locale}/main.qml`, import.meta.url), "utf8")));
-assert.deepEqual(layouts[0].map(row => row.length), [15, 14, 13, 14, 10]);
+assert.deepEqual(layouts[0].map(row => row.length), [15, 14, 13, 14, 11]);
 assert.deepEqual(layouts[1].map(row => row.length), layouts[0].map(row => row.length));
+// The symbol page must stay reachable in every layout that carries a Win key.
+for (const locale of readdirSync(new URL("../src/layouts/", import.meta.url))) {
+    let qml;
+    try { qml = readFileSync(new URL(`../src/layouts/${locale}/main.qml`, import.meta.url), "utf8"); } catch { continue; }
+    if (qml.includes('displayText: "Win"')) {
+        assert.ok(/\bSymbolModeKey\s*\{/.test(qml), `${locale}: Win key must not replace the only path to the symbol page`);
+    }
+}
 const geometry = body => ["weight", "Layout.preferredWidth", "Layout.fillWidth"].map(property => {
     const name = property.replaceAll(".", "\\.");
     return body.match(new RegExp(`^\\s*${name}:\\s*([^\\n]+)`, "m"))?.[1].trim() ?? "inherited";
