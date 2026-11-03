@@ -552,7 +552,13 @@ private:
             // the bottom margin (which the compositor counts as reserved space
             // as well).
             const int panelHeight = m_panelRect.isValid() ? m_panelRect.height() : 0;
-            m_layerShell->setExclusiveZone(m_lockState.allowsPredictions() ? panelHeight : 0);
+            // Only a *known* locked session gives the space up (the lock screen
+            // positions its field from keyboardRectangle). While the state is
+            // unknown, e.g. without a ScreenSaver service or before GetActive
+            // replies, the space stays reserved so windows do not slide under
+            // the docked keyboard.
+            const bool sessionLocked = m_lockState.isKnown() && (m_lockState.isLocked() || m_lockState.isPreparingLock());
+            m_layerShell->setExclusiveZone(sessionLocked ? 0 : panelHeight);
             m_layerShell->setMargins(QMargins(0, 0, 0, liftOverPanel ? m_panelInsets.bottom() : 0));
         }
         m_layerShell->setAnchors(anchors);

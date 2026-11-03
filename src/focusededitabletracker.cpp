@@ -146,8 +146,18 @@ FocusedEditableTracker::~FocusedEditableTracker()
 
 bool FocusedEditableTracker::containsNormalizedTouch(const QPointF &position) const
 {
-    const QScreen *screen = QGuiApplication::primaryScreen();
-    return screen && m_focusedEditableRect.isValid() && m_focusedEditableRect.contains(mapTouchToScreen(position, screen).toPoint());
+    if (!m_focusedEditableRect.isValid()) {
+        return false;
+    }
+    // AT-SPI reports global coordinates, so the touch has to be mapped onto the
+    // screen the field is on, not blindly onto the primary one. When no screen
+    // can be associated with the field the position is uncertain, and the
+    // keyboard is shown rather than hidden from a field the user is holding.
+    const QScreen *screen = QGuiApplication::screenAt(m_focusedEditableRect.center());
+    if (!screen) {
+        return true;
+    }
+    return m_focusedEditableRect.contains(mapTouchToScreen(position, screen).toPoint());
 }
 
 void FocusedEditableTracker::stateChanged(const QString &state, int enabled, int, const QDBusVariant &, const QVariantMap &, const QDBusMessage &message)

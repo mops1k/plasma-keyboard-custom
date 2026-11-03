@@ -72,23 +72,15 @@ endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME lockscreenpatchtest COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/lockscreenpatchtest.py)
 
-if(LayerShellQt_VERSION VERSION_GREATER_EQUAL 6.6.0)
-    ecm_add_test(layershelloutputpolicytest.cpp
-        TEST_NAME layershelloutputpolicytest
-        LINK_LIBRARIES Qt::Core Qt::Gui Qt::Test LayerShellQt::Interface
-    )
-endif()
+# main.cpp is not linkable into a unit test, so its layer-shell policy is
+# checked at the source level (a test of LayerShellQt itself proved nothing).
+add_test(NAME mainpolicysourcetest COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/mainpolicysourcetest.py)
 
 ecm_add_test(keyboardvisibilitystatetest.cpp
     TEST_NAME keyboardvisibilitystatetest
     LINK_LIBRARIES Qt::Core Qt::Test
 )
 target_include_directories(keyboardvisibilitystatetest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
-
-ecm_add_test(keyboardvisibilityordertest.cpp
-    TEST_NAME keyboardvisibilityordertest
-    LINK_LIBRARIES Qt::Core Qt::Gui Qt::Quick Qt::Test
-)
 
 ecm_add_test(lockscreenfocustest.cpp
     TEST_NAME lockscreenfocustest

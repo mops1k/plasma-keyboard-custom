@@ -19,7 +19,7 @@ windows. Кнопка Virtual Keyboard у KScreenLocker не приховує/н
 
 1. `syncKeyboardScreen()` викликає LayerShellQt `setScreen(stub->screen())`.
    На встановленій LayerShellQt 6.7.5 це вимикає попереднє
-   `setWantsToBeOnActiveScreen(true)`. Новий `layershelloutputpolicytest`
+   `setWantsToBeOnActiveScreen(true)`. Тоді доданий `layershelloutputpolicytest` (згодом видалений: перевіряв Qt, а не наш код; його замінив `mainpolicysourcetest`)
    відтворює точний setter sequence без native surface: 4 QtTest cases passed.
    Це доказ override/pin, НЕ повний доказ primary-only routing на KWin.
 2. `KeyboardHotkeyController::updatePanelVisibility()` не виконує compositor
