@@ -341,8 +341,6 @@ InputListenerItem::InputListenerItem()
         }
     });
     connect(&m_input, &InputPlugin::surroundingTextChanged, this, [this] {
-        qCDebug(PlasmaKeyboard) << "long-press diagnostic: surroundingTextChanged"
-                                << "touchDown=" << m_touchHold.touchIsDown() << "armed=" << m_touchHold.isArmed();
         // The word being typed changed with the text around the cursor, so the
         // suggestions have to follow it.
         updatePredictionWords();
@@ -408,13 +406,7 @@ InputListenerItem::InputListenerItem()
         m_hiddenByUser = false;
         showInputPanel(window());
     });
-    connect(&m_input, &InputPlugin::receivedCommit, this, [this] {
-        qCDebug(PlasmaKeyboard) << "long-press diagnostic: commit_state"
-                                << "touchDown=" << m_touchHold.touchIsDown() << "armed=" << m_touchHold.isArmed();
-    });
     connect(&m_input, &InputPlugin::resetRequested, this, [this] {
-        qCDebug(PlasmaKeyboard) << "long-press diagnostic: reset"
-                                << "touchDown=" << m_touchHold.touchIsDown() << "armed=" << m_touchHold.isArmed();
         QGuiApplication::inputMethod()->reset();
     });
     connect(QGuiApplication::inputMethod(), &QInputMethod::visibleChanged, this, [this] {

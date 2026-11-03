@@ -210,11 +210,6 @@ bool TouchHoldWatcher::takeCompletedLongPress(int thresholdMs)
 
 void TouchHoldWatcher::cancelGesture()
 {
-    if (!m_gestureMoved) {
-        qCDebug(PlasmaKeyboard) << "TouchHoldWatcher: gesture cancelled by movement/multitouch"
-                                << "position=" << m_x << m_y << "start=" << m_startX << m_startY << "slop=" << m_xSlop << m_ySlop
-                                << "contacts=" << m_activeSlots.size();
-    }
     m_gestureMoved = true;
     m_holdTimer.stop();
 }
@@ -305,14 +300,10 @@ void TouchHoldWatcher::readEvents()
                 m_haveY = m_currentYValid;
                 m_startX = m_x;
                 m_startY = m_y;
-                qCDebug(PlasmaKeyboard) << "TouchHoldWatcher: touch down"
-                                        << "position=" << m_x << m_y << "positionValid=" << m_haveX << m_haveY << "armed=" << m_armed;
                 if (m_armed) {
                     m_holdTimer.start(m_thresholdMs);
                 }
             } else if (ev.value == 0) {
-                qCDebug(PlasmaKeyboard) << "TouchHoldWatcher: touch up"
-                                        << "armed=" << m_armed << "moved=" << m_gestureMoved;
                 if (!m_gestureMoved && m_touchElapsed.isValid()) {
                     m_completedTouchDurationMs = static_cast<int>(m_touchElapsed.elapsed());
                     m_releaseElapsed.restart();

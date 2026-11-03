@@ -1,3 +1,8 @@
+<!--
+  SPDX-FileCopyrightText: 2026 plasma-keyboard-custom contributors
+  SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
+-->
+
 # KScreenLocker: захищений ввід, фокус та геометрія
 
 > **Runtime regression / withdrawn, 2026-10-20:** наведений нижче focus patch

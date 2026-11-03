@@ -23,12 +23,21 @@ UinputKeyboard::UinputKeyboard()
         return;
     }
 
-    ioctl(m_fd, UI_SET_EVBIT, EV_KEY);
-    // The full standard keycode range (Escape through the multimedia keys),
-    // rather than hand-picking one key at a time for every combination this
-    // might ever need to send.
-    for (int key = 1; key <= 248; ++key) {
-        ioctl(m_fd, UI_SET_KEYBIT, key);
+    bool ok = ioctl(m_fd, UI_SET_EVBIT, EV_KEY) >= 0;
+    // Only keys a keyboard can type or combine into shortcuts: Escape through
+    // the navigation block. Power, sleep, wake-up and media keys are left out so
+    // a bug can never power the machine off through this device.
+    for (int key = 1; key <= KEY_COMPOSE && ok; ++key) {
+        if (key == KEY_POWER || key == KEY_MUTE || key == KEY_VOLUMEDOWN || key == KEY_VOLUMEUP) {
+            continue;
+        }
+        ok = ioctl(m_fd, UI_SET_KEYBIT, key) >= 0;
+    }
+    if (!ok) {
+        qCWarning(PlasmaKeyboard) << "Could not configure the uinput virtual keyboard:" << strerror(errno);
+        close(m_fd);
+        m_fd = -1;
+        return;
     }
 
     uinput_setup setup{};
