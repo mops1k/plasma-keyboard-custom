@@ -160,6 +160,11 @@ bool FocusedEditableTracker::containsNormalizedTouch(const QPointF &position) co
     return m_focusedEditableRect.contains(mapTouchToScreen(position, screen).toPoint());
 }
 
+bool FocusedEditableTracker::hasFocusedEditable() const
+{
+    return m_focusedEditableRect.isValid();
+}
+
 void FocusedEditableTracker::stateChanged(const QString &state, int enabled, int, const QDBusVariant &, const QVariantMap &, const QDBusMessage &message)
 {
     if (state.compare(QStringLiteral("focused"), Qt::CaseInsensitive) != 0 || !m_bus) {

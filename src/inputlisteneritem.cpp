@@ -396,9 +396,18 @@ InputListenerItem::InputListenerItem()
         if (!m_sessionLockState.allowsPredictions()) {
             return;
         }
-        if (m_longPressNeedsHitTest && !m_focusedEditable.containsNormalizedTouch(m_touchHold.normalizedPosition())) {
-            qCDebug(PlasmaKeyboard) << "TouchHoldWatcher: hold was outside the focused editable widget";
-            return;
+        if (m_longPressNeedsHitTest) {
+            if (!m_focusedEditable.hasFocusedEditable()) {
+                // The focused widget's rectangle is unknown: no accessibility
+                // bus, an application that does not expose its objects, or a
+                // query that has not answered yet. A touch cannot be proven to
+                // belong to another widget then, so the hold still opens the
+                // keyboard instead of being silently swallowed.
+                qCDebug(PlasmaKeyboard) << "TouchHoldWatcher: focused widget rectangle unknown, showing keyboard";
+            } else if (!m_focusedEditable.containsNormalizedTouch(m_touchHold.normalizedPosition())) {
+                qCDebug(PlasmaKeyboard) << "TouchHoldWatcher: hold was outside the focused editable widget";
+                return;
+            }
         }
         qCDebug(PlasmaKeyboard) << "TouchHoldWatcher: long press detected, showing keyboard";
         m_touchHold.disarm();

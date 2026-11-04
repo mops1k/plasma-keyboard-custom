@@ -35,6 +35,16 @@ public:
 
     bool containsNormalizedTouch(const QPointF &position) const;
 
+    /**
+     * Whether the focused editable widget has a known screen rectangle.
+     *
+     * When it is unknown (no accessibility bus, an application that does not
+     * expose its objects, or a query that has not answered yet) a touch cannot
+     * be proven to belong to another widget, so callers must not use the hit
+     * test to veto showing the keyboard.
+     */
+    bool hasFocusedEditable() const;
+
 private Q_SLOTS:
     void stateChanged(const QString &state, int enabled, int detail, const QDBusVariant &data, const QVariantMap &properties, const QDBusMessage &message);
 
