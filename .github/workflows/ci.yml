@@ -34,7 +34,7 @@ jobs:
             kcmutils kconfig kcoreaddons kcrash kglobalaccel ki18n \
             kirigami kirigami-addons layer-shell-qt libplasma \
             qt6-base qt6-declarative qt6-multimedia qt6-virtualkeyboard \
-            dbus
+            dbus git python
 
       - name: Checkout
         uses: actions/checkout@v4
