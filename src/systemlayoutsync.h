@@ -27,6 +27,7 @@ class SystemLayoutSync : public QObject
 
 public:
     explicit SystemLayoutSync(QObject *parent = nullptr);
+    ~SystemLayoutSync() override;
 
     //! Switches the system layout to the one matching @p locale, if there is
     //! one and it is not active already.
@@ -34,6 +35,16 @@ public:
 
     //! The system layout name @p locale corresponds to ("ua" for "uk_UA").
     Q_INVOKABLE QString layoutForLocale(const QString &locale) const;
+
+    /**
+     * Suppresses the Plasma OSD for layout changes while the keyboard is on
+     * screen, and restores the user's setting once it is hidden.
+     *
+     * Switching the system layout from the keyboard would otherwise pop the
+     * "RU"/"EN" OSD over the keyboard on every language switch. The original
+     * value is kept in a runtime marker so a crash cannot leave the OSD off.
+     */
+    Q_INVOKABLE void setKeyboardVisible(bool visible);
 
 Q_SIGNALS:
     //! The system layout was switched (by the user or by syncToLocale()).
@@ -45,4 +56,14 @@ private Q_SLOTS:
 private:
     void fetchLayouts(std::function<void(const QStringList &)> done);
     void fetchCurrentLayout(std::function<void(int)> done);
+
+    bool readOsdEnabled() const;
+    void writeOsdEnabled(bool enabled);
+    void suppressLayoutOsd();
+    void restoreLayoutOsd();
+    static QString osdMarkerPath();
+
+    bool m_keyboardVisible = false;
+    bool m_osdSuppressed = false;
+    bool m_osdOriginal = true;
 };

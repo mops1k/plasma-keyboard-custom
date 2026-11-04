@@ -38,6 +38,9 @@ InputPanelWindow {
     }
 
     onVisibleChanged: {
+        // No Plasma OSD for the layout switches the keyboard makes itself;
+        // it comes back as soon as the keyboard is off screen.
+        PlasmaKeyboard.SystemLayout.setKeyboardVisible(visible);
         updatePredictions();
         if (visible) {
             // The window is unmapped while the keyboard is hidden, which also

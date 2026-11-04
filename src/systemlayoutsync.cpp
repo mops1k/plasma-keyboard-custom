@@ -7,18 +7,32 @@
 #include "systemlayoutsync.h"
 #include "logging.h"
 
+#include <KConfig>
+#include <KConfigGroup>
+
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QLocale>
+#include <QStandardPaths>
 
 namespace
 {
 constexpr auto s_service = "org.kde.keyboard";
 constexpr auto s_path = "/Layouts";
 constexpr auto s_iface = "org.kde.KeyboardLayouts";
+
+//! The Plasma OSD shows a popup on every layout change; the keyboard switches
+//! the layout itself, so the popup has to be kept out of the way while it is
+//! on screen. Key and group of that setting in plasmarc.
+constexpr auto s_plasmaConfig = "plasmarc";
+constexpr auto s_osdGroup = "OSD";
+constexpr auto s_osdKey = "kbdLayoutChangedEnabled";
 
 QDBusMessage layoutsCall(const QString &method)
 {
@@ -31,6 +45,87 @@ SystemLayoutSync::SystemLayoutSync(QObject *parent)
 {
     QDBusConnection::sessionBus()
         .connect(QLatin1String(s_service), QLatin1String(s_path), QLatin1String(s_iface), QStringLiteral("layoutChanged"), this, SLOT(onLayoutChanged(uint)));
+
+    // A previous process may have died while the OSD was suppressed: the
+    // marker keeps the value the user had chosen, so put it back.
+    QFile marker(osdMarkerPath());
+    if (marker.exists() && marker.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QString saved = QString::fromUtf8(marker.readAll()).trimmed();
+        marker.close();
+        m_osdOriginal = saved != QLatin1String("false");
+        writeOsdEnabled(m_osdOriginal);
+        QFile::remove(osdMarkerPath());
+        qCWarning(PlasmaKeyboard) << "Restored the layout OSD setting after an unclean shutdown";
+    }
+}
+
+SystemLayoutSync::~SystemLayoutSync()
+{
+    restoreLayoutOsd();
+}
+
+bool SystemLayoutSync::readOsdEnabled() const
+{
+    KConfig config(QString::fromLatin1(s_plasmaConfig), KConfig::NoGlobals);
+    return KConfigGroup(&config, QString::fromLatin1(s_osdGroup)).readEntry(QString::fromLatin1(s_osdKey), true);
+}
+
+void SystemLayoutSync::writeOsdEnabled(bool enabled)
+{
+    KConfig config(QString::fromLatin1(s_plasmaConfig), KConfig::NoGlobals);
+    KConfigGroup group(&config, QString::fromLatin1(s_osdGroup));
+    // KConfig::Notify makes Plasma re-read the value at once instead of on the
+    // next restart, so the OSD is already gone when the layout is switched.
+    group.writeEntry(QString::fromLatin1(s_osdKey), enabled, KConfig::Notify);
+    config.sync();
+}
+
+QString SystemLayoutSync::osdMarkerPath()
+{
+    QString directory = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+    if (directory.isEmpty()) {
+        directory = QDir::tempPath();
+    }
+    return directory + QStringLiteral("/plasma-keyboard-custom/layout-osd-suppressed");
+}
+
+void SystemLayoutSync::suppressLayoutOsd()
+{
+    if (m_osdSuppressed) {
+        return;
+    }
+    m_osdOriginal = readOsdEnabled();
+    QDir().mkpath(QFileInfo(osdMarkerPath()).absolutePath());
+    QFile marker(osdMarkerPath());
+    if (marker.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        marker.write(m_osdOriginal ? "true" : "false");
+        marker.close();
+    }
+    writeOsdEnabled(false);
+    m_osdSuppressed = true;
+}
+
+void SystemLayoutSync::restoreLayoutOsd()
+{
+    if (!m_osdSuppressed) {
+        return;
+    }
+    writeOsdEnabled(m_osdOriginal);
+    QFile::remove(osdMarkerPath());
+    m_osdSuppressed = false;
+}
+
+void SystemLayoutSync::setKeyboardVisible(bool visible)
+{
+    if (m_keyboardVisible == visible) {
+        return;
+    }
+    m_keyboardVisible = visible;
+    if (visible) {
+        suppressLayoutOsd();
+    } else {
+        restoreLayoutOsd();
+    }
 }
 
 namespace
