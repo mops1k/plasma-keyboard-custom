@@ -7,9 +7,9 @@
 #pragma once
 
 #include <QObject>
-#include <functional>
 #include <QString>
 #include <QStringList>
+#include <functional>
 
 /**
  * Keeps the system keyboard layout (org.kde.keyboard) and the language of the
