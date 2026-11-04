@@ -1,0 +1,59 @@
+# Build the project and run the test suite on every pull request and on
+# master. The release workflow builds the packages; this one is the gate that
+# tells whether the source is worth packaging at all.
+
+name: Build and test
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to the same branch makes the previous run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Syyuu --noconfirm --needed --overwrite '*' \
+            cmake extra-cmake-modules gettext ninja plasma-wayland-protocols \
+            qt6-wayland wayland-protocols pkgconf \
+            kcmutils kconfig kcoreaddons kcrash kglobalaccel ki18n \
+            kirigami kirigami-addons kitemodels layer-shell-qt libplasma \
+            qt6-base qt6-declarative qt6-multimedia qt6-virtualkeyboard \
+            dbus
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        # The mock compositor test creates a real Qt Wayland compositor; it
+        # needs EGL, which a container without a GPU does not provide (it fails
+        # the same way on a local machine without EGL). Everything else runs:
+        # the D-Bus tests wrap themselves in dbus-run-session, and the QML
+        # tests render offscreen.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          cd build
+          ctest --output-on-failure --no-tests=error \
+            --exclude-regex '^mockinputmethodcompositor$'
