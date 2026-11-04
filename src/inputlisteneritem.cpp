@@ -193,7 +193,7 @@ InputListenerItem::InputListenerItem()
     , m_sessionLockState(*SessionLockState::instance())
     , m_overlayController(new OverlayController(&m_input, this))
     , m_clipboardHistory(new ClipboardHistory(&m_sessionLockState, this))
-    , m_uinput(std::make_unique<UinputKeyboard>())
+    , m_uinput(std::make_unique<UinputKeyboard>(this))
 {
     // Grab and listen to physical keyboard input
     m_input.setGrabbing(true);

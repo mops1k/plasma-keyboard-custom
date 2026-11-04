@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <QQueue>
+#include <QTimer>
+
 /**
  * A minimal virtual keyboard on /dev/uinput.
  *
@@ -26,12 +29,18 @@
  * case. It is only a fallback to the input-method-v1 path (kept for when
  * /dev/uinput cannot be opened) that is now the exception rather than the
  * rule.
+ *
+ * Events are queued and written one per timer tick, so a combination never
+ * blocks the caller -- this object lives on the GUI thread, where a blocking
+ * delay between events would stall the keyboard itself.
  */
-class UinputKeyboard
+class UinputKeyboard : public QObject
 {
+    Q_OBJECT
+
 public:
-    UinputKeyboard();
-    ~UinputKeyboard();
+    explicit UinputKeyboard(QObject *parent = nullptr);
+    ~UinputKeyboard() override;
 
     UinputKeyboard(const UinputKeyboard &) = delete;
     UinputKeyboard &operator=(const UinputKeyboard &) = delete;
@@ -41,16 +50,27 @@ public:
     //! that as "the feature is unavailable" rather than an error.
     bool isValid() const;
 
-    //! Sends a key-down for the given Linux evdev key code (KEY_* from
-    //! <linux/input-event-codes.h>) and syncs the device. No-op if !isValid().
+    //! Queues a key-down for the given Linux evdev key code (KEY_* from
+    //! <linux/input-event-codes.h>), followed by a device sync. No-op if
+    //! !isValid(). Returns as soon as the event is queued.
     void pressKey(int keyCode);
 
-    //! Sends a key-up for the given evdev key code and syncs the device.
+    //! Queues a key-up for the given evdev key code and syncs the device.
     //! No-op if !isValid().
     void releaseKey(int keyCode);
 
 private:
-    void emit(int keyCode, int value);
+    void enqueue(int keyCode, int value);
+    void flushNextEvent();
+    void writeEvent(int keyCode, int value);
+
+    //! Minimum spacing between two events. A human pressing a combination
+    //! always leaves tens of milliseconds of overlap between the keys; see
+    //! flushNextEvent() for why the compositor needs that overlap to be
+    //! ordered rather than simultaneous.
+    static constexpr int interEventDelayMs = 10;
 
     int m_fd = -1;
+    QQueue<std::pair<int, int>> m_pending;
+    QTimer m_pumpTimer;
 };

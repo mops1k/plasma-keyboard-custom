@@ -7,15 +7,17 @@
 #include "uinputkeyboard.h"
 #include "logging.h"
 
-#include <chrono>
 #include <cstring>
 #include <fcntl.h>
 #include <linux/uinput.h>
-#include <thread>
 #include <unistd.h>
+#include <utility>
 
-UinputKeyboard::UinputKeyboard()
+UinputKeyboard::UinputKeyboard(QObject *parent)
+    : QObject(parent)
 {
+    connect(&m_pumpTimer, &QTimer::timeout, this, &UinputKeyboard::flushNextEvent);
+
     m_fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if (m_fd < 0) {
         qCWarning(PlasmaKeyboard) << "Could not open /dev/uinput, Meta shortcuts will not reach the compositor's global shortcuts:" << strerror(errno);
@@ -67,18 +69,45 @@ bool UinputKeyboard::isValid() const
     return m_fd >= 0;
 }
 
-void UinputKeyboard::emit(int keyCode, int value)
+void UinputKeyboard::enqueue(int keyCode, int value)
 {
     if (m_fd < 0) {
         return;
     }
 
+    m_pending.append(std::make_pair(keyCode, value));
+    // The first event of a burst goes out immediately; only the follow-up
+    // events are spaced out. Spacing is asynchronous on purpose: this object
+    // is owned by the keyboard's GUI thread, and the old blocking 10 ms pause
+    // after every event stalled keyPressEvent() for the whole combination.
+    if (!m_pumpTimer.isActive()) {
+        flushNextEvent();
+        if (!m_pending.isEmpty()) {
+            m_pumpTimer.start(interEventDelayMs);
+        }
+    }
+}
+
+void UinputKeyboard::flushNextEvent()
+{
+    if (m_pending.isEmpty()) {
+        m_pumpTimer.stop();
+        return;
+    }
+    const auto [keyCode, value] = m_pending.dequeue();
+    writeEvent(keyCode, value);
+}
+
+void UinputKeyboard::writeEvent(int keyCode, int value)
+{
     input_event event{};
     event.type = EV_KEY;
     event.code = static_cast<uint16_t>(keyCode);
     event.value = value;
     if (write(m_fd, &event, sizeof(event)) != sizeof(event)) {
         qCWarning(PlasmaKeyboard) << "Failed to write a uinput key event:" << strerror(errno);
+        m_pending.clear();
+        m_pumpTimer.stop();
         return;
     }
 
@@ -88,28 +117,17 @@ void UinputKeyboard::emit(int keyCode, int value)
     sync.value = 0;
     if (write(m_fd, &sync, sizeof(sync)) != sizeof(sync)) {
         qCWarning(PlasmaKeyboard) << "Failed to write a uinput sync event:" << strerror(errno);
+        m_pending.clear();
+        m_pumpTimer.stop();
     }
-
-    // Without a pause here, a combination's events (e.g. Meta down, then L
-    // down a function call later but still the same millisecond) can reach
-    // libinput/KWin close enough together that the compositor's global
-    // shortcut matcher evaluates the second key before it has finished
-    // registering the first one as held -- a real race, not a hypothetical
-    // one: it showed up as "Meta+L locks the session, then the lock
-    // immediately flies back open" (actually the launcher opening from a
-    // Meta seen as a bare tap, then losing focus again right away). A human
-    // pressing a physical combo always leaves tens of milliseconds of overlap
-    // between the keys for the same reason. 10ms per event is well under
-    // that and not perceptible when typing.
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 void UinputKeyboard::pressKey(int keyCode)
 {
-    emit(keyCode, 1);
+    enqueue(keyCode, 1);
 }
 
 void UinputKeyboard::releaseKey(int keyCode)
 {
-    emit(keyCode, 0);
+    enqueue(keyCode, 0);
 }
