@@ -23,6 +23,9 @@ class AsyncPredictor : public QObject
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(QVariantList predictions READ predictions NOTIFY predictionsChanged)
+    //! A request is in flight: the previous chips stay on screen instead of
+    //! letting the clipboard row flash up between two keystrokes.
+    Q_PROPERTY(bool pending READ pending NOTIFY pendingChanged)
 
 public:
     struct Request {
@@ -47,17 +50,20 @@ public:
     ~AsyncPredictor() override;
 
     QVariantList predictions() const;
+    bool pending() const;
     Q_INVOKABLE void
     request(const QString &prefix, const QString &context, const QString &locale, int limit, int minPrefixLength, bool correction, bool nextWord);
     Q_INVOKABLE void cancel();
 
 Q_SIGNALS:
     void predictionsChanged();
+    void pendingChanged();
 
 private:
     void dispatch(const Request &request);
     void finished(quint64 generation, const QStringList &words, const QString &kind);
     void clear();
+    void setPending(bool pending);
 
     QThread *m_thread;
     PredictionWorker *m_worker;
@@ -66,4 +72,5 @@ private:
     quint64 m_generation = 0;
     int m_typedLength = 0;
     bool m_busy = false;
+    bool m_pendingResult = false;
 };

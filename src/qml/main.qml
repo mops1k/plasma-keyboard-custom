@@ -997,8 +997,10 @@ InputPanelWindow {
             //! Whether there is something to suggest for the word being typed.
             readonly property bool hasSuggestions: root.predictions.length > 0
 
-            //! Whether there are clipboard entries to offer.
-            readonly property bool hasClipboard: root.auxiliaryUiAllowed && thing.clipboardHistory.available && thing.clipboardHistory.count > 0
+            //! Whether there are clipboard entries to offer. While a prediction
+            //! request is in flight the row keeps the previous chips instead of
+            //! flashing the clipboard between two keystrokes.
+            readonly property bool hasClipboard: root.auxiliaryUiAllowed && thing.clipboardHistory.available && thing.clipboardHistory.count > 0 && !predictor.pending
 
             //! Set when the clipboard was asked for while suggestions are
             //! available; a new word gives way to the suggestions again.
@@ -1082,7 +1084,7 @@ InputPanelWindow {
                 }
             }
 
-            visible: root.auxiliaryUiAllowed && (showingSuggestions || hasClipboard)
+            visible: root.auxiliaryUiAllowed && (showingSuggestions || hasClipboard || predictor.pending)
             onVisibleChanged: {
                 if (!visible && root.extraRowFocus === root.zoneOf("suggestions")) {
                     root.extraRowFocus = 0;

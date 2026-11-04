@@ -90,6 +90,20 @@ QVariantList AsyncPredictor::predictions() const
     return m_predictions;
 }
 
+bool AsyncPredictor::pending() const
+{
+    return m_pendingResult;
+}
+
+void AsyncPredictor::setPending(bool pending)
+{
+    if (m_pendingResult == pending) {
+        return;
+    }
+    m_pendingResult = pending;
+    Q_EMIT pendingChanged();
+}
+
 void AsyncPredictor::clear()
 {
     if (!m_predictions.isEmpty()) {
@@ -102,6 +116,7 @@ void AsyncPredictor::cancel()
 {
     ++m_generation;
     m_pending.reset();
+    setPending(false);
     clear();
 }
 
@@ -113,9 +128,15 @@ void AsyncPredictor::request(const QString &prefix,
                              bool correction,
                              bool nextWord)
 {
-    cancel();
+    // Not cancel(): the chips of the previous request stay on screen until the
+    // new result arrives, so typing does not make the row fall back to the
+    // clipboard and back on every key.
+    ++m_generation;
+    m_pending.reset();
     m_typedLength = prefix.size();
     if (limit <= 0 || (prefix.size() < std::max(1, minPrefixLength) && !(prefix.isEmpty() && nextWord))) {
+        clear();
+        setPending(false);
         return;
     }
     const Request request{prefix, context, locale, std::min(limit, 32), std::max(1, minPrefixLength), correction, nextWord};
@@ -124,6 +145,7 @@ void AsyncPredictor::request(const QString &prefix,
     } else {
         dispatch(request);
     }
+    setPending(true);
 }
 
 void AsyncPredictor::dispatch(const Request &request)
@@ -142,6 +164,7 @@ void AsyncPredictor::finished(quint64 generation, const QStringList &words, cons
 {
     m_busy = false;
     if (generation == m_generation) {
+        m_predictions.clear();
         for (const auto &word : words) {
             m_predictions.append(QVariantMap{
                 {QStringLiteral("text"), word},
@@ -154,6 +177,8 @@ void AsyncPredictor::finished(quint64 generation, const QStringList &words, cons
     if (m_pending) {
         const auto request = std::exchange(m_pending, std::nullopt);
         dispatch(*request);
+    } else {
+        setPending(false);
     }
 }
 
