@@ -35,6 +35,15 @@ class GamepadHandler : public QObject
     /*! Whether an InputPlumber dbus target device was found. */
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
 
+    /**
+     * Whether the keyboard is on screen, i.e. whether the gamepad should drive
+     * it. The compositor stops reporting the keyboard as visible as soon as the
+     * text input goes away, but with hideOnInputFocusLoss off the keyboard stays
+     * on screen and has to stay controllable: the panel binds this to the
+     * keyboard window rather than to what the compositor reports.
+     */
+    Q_PROPERTY(bool keyboardOnScreen READ keyboardOnScreen WRITE setKeyboardOnScreen NOTIFY keyboardOnScreenChanged)
+
 public:
     explicit GamepadHandler(QObject *parent = nullptr);
     ~GamepadHandler() override;
@@ -49,6 +58,9 @@ public:
      */
     Q_INVOKABLE void setActive(bool active);
     bool isActive() const;
+
+    bool keyboardOnScreen() const;
+    void setKeyboardOnScreen(bool onScreen);
 
     /**
      * Whether an alternates overlay may be opened right now, together with the
@@ -96,6 +108,7 @@ Q_SIGNALS:
     void toggleExtraRows();
 
     void availableChanged();
+    void keyboardOnScreenChanged();
 
 private Q_SLOTS:
     void onInputEvent(const QString &event, double value);
@@ -106,6 +119,8 @@ private:
     void handleDirection(int key, bool pressed);
     void handleBackspace(bool pressed);
     void handleAccept(bool pressed);
+    void setKwinVisible(bool visible);
+    void recomputeActive();
     uint interceptMode() const;
     void setInterceptMode(uint mode);
 
@@ -113,6 +128,10 @@ private:
     QString m_compositePath;
     bool m_active = false;
     uint m_savedInterceptMode = 0;
+    /*! Whether the compositor reports the keyboard as visible. */
+    bool m_kwinVisible = false;
+    /*! Whether the keyboard window is on screen (see the keyboardOnScreen property). */
+    bool m_keyboardOnScreen = false;
     QSet<int> m_pressedDirections;
     QTimer *m_repeatTimer = nullptr;
     QTimer *m_backspaceTimer = nullptr;

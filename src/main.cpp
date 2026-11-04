@@ -316,6 +316,11 @@ class KeyboardWindowBridge : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool kwinVisible READ kwinVisible NOTIFY kwinVisibleChanged)
+    //! Whether the layer-shell keyboard window itself is mapped. The compositor
+    //! stops reporting the keyboard as visible as soon as the text input goes
+    //! away, while with hideOnInputFocusLoss off the window stays on screen; the
+    //! gamepad has to follow the window then (see GamepadHandler).
+    Q_PROPERTY(bool keyboardWindowVisible READ keyboardWindowVisible NOTIFY keyboardWindowVisibleChanged)
 
 public:
     explicit KeyboardWindowBridge(QObject *parent = nullptr)
@@ -510,10 +515,20 @@ private:
         if (const auto *screen = m_stub->screen(); screen && m_stub->size() != screen->geometry().size()) {
             m_stub->resize(screen->geometry().size());
         }
+        // A known locked and docked session advertises the panel rectangle
+        // through two corner pixels. Everywhere else the region only has to
+        // change for the compositor to reposition the panel, so the one pixel
+        // alternates: without a change the panel can keep the position it was
+        // given before the keyboard's space was reserved, and the focused
+        // window is not moved until something else repositions it.
         const bool locked = m_lockState.isKnown() && m_lockState.isLocked() && QGuiApplication::inputMethod()->isVisible();
-        m_stub->setMask(panelStubInputRegion(m_panelRect, m_stub->size(), locked, !PlasmaKeyboardSettings::self()->floatingKeyboard()));
-        // During resize KWin clips the region to the committed buffer; its
-        // sizeChanged path repositions the panel when the new buffer arrives.
+        const QRegion lockRegion = panelStubInputRegion(m_panelRect, m_stub->size(), locked, !PlasmaKeyboardSettings::self()->floatingKeyboard());
+        if (lockRegion == QRegion(0, 0, 1, 1)) {
+            m_stubMaskOffset ^= 1;
+            m_stub->setMask(QRegion(m_stubMaskOffset, 0, 1, 1));
+        } else {
+            m_stub->setMask(lockRegion);
+        }
         // Qt Wayland attaches the input region to the next surface commit.
         m_stub->requestUpdate();
     }
@@ -603,6 +618,16 @@ private:
             qCDebug(PlasmaKeyboard) << "panel stub mapped:" << visible;
             m_stub->setVisible(visible);
         }
+        // The compositor repositions the panel when it is shown, before it has
+        // applied the space the keyboard window reserves: the panel then keeps
+        // that position until something moves it, and the focused window is not
+        // resized out of the keyboard's way until then. Ask for a reposition once
+        // the reserved space has reached the compositor.
+        if (visible) {
+            QTimer::singleShot(150, this, [this] {
+                applyStubMask();
+            });
+        }
     }
 
     SessionLockState &m_lockState;
@@ -613,6 +638,8 @@ private:
     QRect m_panelRect;
     QMargins m_panelInsets;
     bool m_kwinVisible = false;
+    /*! Alternates the one pixel input region so that the compositor sees it change. */
+    int m_stubMaskOffset = 0;
 };
 
 /**
