@@ -73,8 +73,7 @@ Q_SIGNALS:
     void longPress();
 
 private:
-    struct Device
-    {
+    struct Device {
         int fd = -1;
         QSocketNotifier *notifier = nullptr;
         QString path;

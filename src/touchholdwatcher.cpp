@@ -211,8 +211,7 @@ QPointF TouchHoldWatcher::normalizedPosition() const
     if (xRange <= 0 || yRange <= 0) {
         return {};
     }
-    return QPointF(std::clamp(double(dev->x - dev->xMinimum) / xRange, 0.0, 1.0),
-                   std::clamp(double(dev->y - dev->yMinimum) / yRange, 0.0, 1.0));
+    return QPointF(std::clamp(double(dev->x - dev->xMinimum) / xRange, 0.0, 1.0), std::clamp(double(dev->y - dev->yMinimum) / yRange, 0.0, 1.0));
 }
 
 bool TouchHoldWatcher::takeCompletedLongPress(int thresholdMs)
