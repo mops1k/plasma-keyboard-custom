@@ -32,7 +32,7 @@ jobs:
             cmake extra-cmake-modules gettext ninja plasma-wayland-protocols \
             qt6-wayland wayland-protocols pkgconf \
             kcmutils kconfig kcoreaddons kcrash kglobalaccel ki18n \
-            kirigami kirigami-addons kitemodels layer-shell-qt libplasma \
+            kirigami kirigami-addons layer-shell-qt libplasma \
             qt6-base qt6-declarative qt6-multimedia qt6-virtualkeyboard \
             dbus
 
