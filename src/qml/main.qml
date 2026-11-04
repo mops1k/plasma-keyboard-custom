@@ -468,6 +468,12 @@ InputPanelWindow {
     GamepadHandler {
         id: gamepad
 
+        // The compositor stops reporting the keyboard as visible as soon as the
+        // text input goes away, but with hideOnInputFocusLoss off the keyboard
+        // window stays on screen: the gamepad keeps driving it then, so that the
+        // buttons still type and close the keyboard while there is no cursor.
+        keyboardOnScreen: PlasmaKeyboard.KeyboardWindow.keyboardWindowVisible || PlasmaKeyboard.KeyboardWindow.kwinVisible
+
         //! The alternates overlay that the gamepad itself opened and drives.
         //! Touch and physical keyboards open the same overlay through the
         //! input method instead, and that one keeps its own selection.

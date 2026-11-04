@@ -274,6 +274,11 @@ class KeyboardWindowBridge : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool kwinVisible READ kwinVisible NOTIFY kwinVisibleChanged)
+    //! Whether the layer-shell keyboard window itself is mapped. The compositor
+    //! stops reporting the keyboard as visible as soon as the text input goes
+    //! away, while with hideOnInputFocusLoss off the window stays on screen; the
+    //! gamepad has to follow the window then (see GamepadHandler).
+    Q_PROPERTY(bool keyboardWindowVisible READ keyboardWindowVisible NOTIFY keyboardWindowVisibleChanged)
 
 public:
     explicit KeyboardWindowBridge(QObject *parent = nullptr)
@@ -434,7 +439,15 @@ private:
         if (!m_stub) {
             return;
         }
-        m_stub->setMask(QRegion(0, 0, 1, 1));
+        // The compositor repositions the panel, and with it resizes the focused
+        // window out of the keyboard's way, only when the input region or the
+        // surface size changes. The region is one pixel either way, so alternating
+        // it makes the compositor see the change without the panel taking any part
+        // in the layout: without it the panel can keep the position it was given
+        // before the keyboard's space was reserved, and the window is not moved
+        // until something else (a cursor move) makes the compositor reposition it.
+        m_stubMaskOffset ^= 1;
+        m_stub->setMask(QRegion(m_stubMaskOffset, 0, 1, 1));
         // Qt Wayland attaches the input region to the next surface commit.
         m_stub->requestUpdate();
     }
@@ -514,6 +527,16 @@ private:
             qCDebug(PlasmaKeyboard) << "panel stub mapped:" << visible;
             m_stub->setVisible(visible);
         }
+        // The compositor repositions the panel when it is shown, before it has
+        // applied the space the keyboard window reserves: the panel then keeps
+        // that position until something moves it, and the focused window is not
+        // resized out of the keyboard's way until then. Ask for a reposition once
+        // the reserved space has reached the compositor.
+        if (visible) {
+            QTimer::singleShot(150, this, [this] {
+                applyStubMask();
+            });
+        }
     }
 
     QPointer<QQuickWindow> m_stub;
@@ -522,6 +545,8 @@ private:
     QRect m_panelRect;
     QMargins m_panelInsets;
     bool m_kwinVisible = false;
+    /*! Alternates the one pixel input region so that the compositor sees it change. */
+    int m_stubMaskOffset = 0;
 };
 
 /**

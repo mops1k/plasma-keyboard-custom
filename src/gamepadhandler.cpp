@@ -161,7 +161,7 @@ void GamepadHandler::onKWinPropertiesChanged(const QString &interfaceName, const
         return;
     }
     if (changed.contains(QStringLiteral("visible"))) {
-        setActive(changed.value(QStringLiteral("visible")).toBool());
+        setKwinVisible(changed.value(QStringLiteral("visible")).toBool());
     }
 }
 
@@ -181,12 +181,41 @@ void GamepadHandler::refreshFromKWin()
     // A previous instance may have died before it could give the gamepad back
     // (a crash, or a kill while the keyboard was up), which leaves the gamepad
     // intercepted forever: it would neither reach the game nor Steam again.
-    if (!visible && !m_active && interceptMode() == s_interceptGamepadOnly) {
+    if (!visible && !m_keyboardOnScreen && !m_active && interceptMode() == s_interceptGamepadOnly) {
         qCDebug(PlasmaKeyboard) << "GamepadHandler: giving back a gamepad left intercepted by an earlier instance";
         setInterceptMode(s_interceptNone);
     }
 
-    setActive(visible);
+    setKwinVisible(visible);
+}
+
+void GamepadHandler::setKwinVisible(bool visible)
+{
+    m_kwinVisible = visible;
+    recomputeActive();
+}
+
+bool GamepadHandler::keyboardOnScreen() const
+{
+    return m_keyboardOnScreen;
+}
+
+void GamepadHandler::setKeyboardOnScreen(bool onScreen)
+{
+    if (onScreen == m_keyboardOnScreen) {
+        return;
+    }
+    m_keyboardOnScreen = onScreen;
+    Q_EMIT keyboardOnScreenChanged();
+    // The keyboard window can stay on screen after the text input went away, so
+    // the compositor no longer reports it as visible: the gamepad keeps driving
+    // the keyboard for as long as the window is there.
+    recomputeActive();
+}
+
+void GamepadHandler::recomputeActive()
+{
+    setActive(m_kwinVisible || m_keyboardOnScreen);
 }
 
 GamepadHandler::~GamepadHandler()
