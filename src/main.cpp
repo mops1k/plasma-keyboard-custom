@@ -36,6 +36,7 @@
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
 #include <QDBusVariant>
 #include <QDir>
 #include <QFile>
@@ -65,6 +66,9 @@ namespace
 constexpr auto s_kwinService = "org.kde.KWin";
 constexpr auto s_kwinPath = "/VirtualKeyboard";
 constexpr auto s_kwinIface = "org.kde.kwin.VirtualKeyboard";
+//! Show Desktop lives on the compositor object, not on the virtual keyboard.
+constexpr auto s_kwinDesktopPath = "/KWin";
+constexpr auto s_kwinDesktopIface = "org.kde.KWin";
 constexpr auto s_kwinPropertiesIface = "org.freedesktop.DBus.Properties";
 
 int kwinMode()
@@ -681,6 +685,31 @@ public:
         // as the window is mapped or unmapped, without waiting for the poll.
         connect(m_bridge, &KeyboardWindowBridge::keyboardWindowVisibleChanged, this, &KeyboardHotkeyController::updatePanelVisibility);
 
+        // Show Desktop hides the keyboard together with the other windows while
+        // its window stays mapped on this side, so the panel would stay in
+        // autohide and leave an empty desktop. Follow KWin's state and put the
+        // panel back while the desktop is shown.
+        QDBusConnection::sessionBus().connect(QLatin1String(s_kwinService),
+                                              QLatin1String(s_kwinDesktopPath),
+                                              QLatin1String(s_kwinDesktopIface),
+                                              QStringLiteral("showingDesktopChanged"),
+                                              this,
+                                              SLOT(onShowingDesktopChanged(bool)));
+        auto *showingDesktopWatcher =
+            new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(QLatin1String(s_kwinService),
+                                                                                                               QLatin1String(s_kwinPath),
+                                                                                                               QLatin1String(s_kwinPropertiesIface),
+                                                                                                               QStringLiteral("Get"))
+                                                                                << QLatin1String(s_kwinIface) << QStringLiteral("showingDesktop")),
+                                        this);
+        connect(showingDesktopWatcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *call) {
+            const QDBusMessage reply = call->reply();
+            call->deleteLater();
+            if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+                onShowingDesktopChanged(reply.arguments().first().value<QDBusVariant>().variant().toBool());
+            }
+        });
+
         // The PropertiesChanged signal is not always delivered; poll instead.
         auto *pollTimer = new QTimer(this);
         pollTimer->setInterval(1000);
@@ -768,8 +797,10 @@ public Q_SLOTS:
         // mapped and keeps the space it reserves. The Plasma panel has to follow
         // the window rather than the compositor report: a panel that is put back
         // while that space is still reserved has nowhere to sit at the bottom, so
-        // it ends up right above the keyboard instead of below it.
-        const bool keyboardOnScreen = keyboardVisible || (m_bridge && m_bridge->keyboardWindowVisible());
+        // it ends up right above the keyboard instead of below it. Show Desktop
+        // is the exception: KWin hides the keyboard with the other windows, so
+        // the panel has to come back even while the window is still mapped.
+        const bool keyboardOnScreen = !m_showingDesktop && (keyboardVisible || (m_bridge && m_bridge->keyboardWindowVisible()));
 
         // The visible keyboard window follows what the compositor reports: KWin
         // still decides when the keyboard is on screen (input mode and focus),
@@ -821,6 +852,21 @@ private Q_SLOTS:
         if (changed.contains(QStringLiteral("visible")) && !changed.value(QStringLiteral("visible")).toBool()) {
             applyConfiguredMode();
         }
+    }
+
+    void onShowingDesktopChanged(bool showing)
+    {
+        if (m_showingDesktop == showing) {
+            return;
+        }
+        m_showingDesktop = showing;
+        if (showing) {
+            // Show Desktop hides the keyboard on the compositor side while this
+            // side still considers the window mapped: hide it here as well so
+            // the screen is actually empty and the panel can come back.
+            QGuiApplication::inputMethod()->setVisible(false);
+        }
+        updatePanelVisibility();
     }
 
 private:
@@ -877,6 +923,7 @@ private:
     KeyboardVisibilityState m_visibility;
     bool m_applyingCompositorVisibility = false;
     bool m_lastPanelLayoutVisible = false;
+    bool m_showingDesktop = false;
 };
 
 // signal handler for SIGINT & SIGTERM
