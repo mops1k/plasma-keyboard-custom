@@ -962,10 +962,20 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // The autotests start this binary themselves against a mock compositor. It
+    // must not hook into the session it happens to run in: a global shortcut
+    // registered there outlives the test and leaves the real hotkey pointing at
+    // a process that is gone, so the shortcut silently stops working.
+    const bool testMode = qEnvironmentVariableIsSet("PLASMA_KEYBOARD_TEST_MODE");
+
     // Keep a detached watchdog around. KWin does not start the input method
     // again when it dies, which would take the global shortcut with it; the
-    // watchdog outlives this process and asks KWin for a replacement.
-    QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("--watchdog")});
+    // watchdog outlives this process and asks KWin for a replacement. Under a
+    // test it would outlive the test instead and restart the session input
+    // method, so there it stays away.
+    if (!testMode) {
+        QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("--watchdog")});
+    }
 
     KLocalizedString::setApplicationDomain("plasma-keyboard");
 
@@ -992,8 +1002,10 @@ int main(int argc, char **argv)
     showAction->setProperty("componentName", QStringLiteral("org.kde.plasma.keyboard.custom"));
     showAction->setProperty("componentDisplayName", i18n("Plasma Keyboard (custom)"));
     const QList<QKeySequence> defaultShortcut{QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_K)};
-    KGlobalAccel::self()->setDefaultShortcut(showAction, defaultShortcut, KGlobalAccel::NoAutoloading);
-    KGlobalAccel::self()->setShortcut(showAction, defaultShortcut, KGlobalAccel::NoAutoloading);
+    if (!testMode) {
+        KGlobalAccel::self()->setDefaultShortcut(showAction, defaultShortcut, KGlobalAccel::NoAutoloading);
+        KGlobalAccel::self()->setShortcut(showAction, defaultShortcut, KGlobalAccel::NoAutoloading);
+    }
     auto *keyboardWindowBridge = new KeyboardWindowBridge(&application);
     auto *hotkeyController = new KeyboardHotkeyController(keyboardWindowBridge, &application);
     QObject::connect(showAction, &QAction::triggered, hotkeyController, &KeyboardHotkeyController::showKeyboard);
@@ -1240,13 +1252,16 @@ int main(int argc, char **argv)
 
     // KWin does not always give windows back the size the virtual keyboard took
     // from them (KDE bug 459136), so a small script inside KWin watches the
-    // keyboard and returns the geometry to the windows it shortened.
-    const QString windowRestoreScript = installWindowRestoreScript();
-    if (!windowRestoreScript.isEmpty()) {
-        setWindowRestoreScript(windowRestoreScript, true);
-        QObject::connect(&application, &QCoreApplication::aboutToQuit, &application, [windowRestoreScript] {
-            setWindowRestoreScript(windowRestoreScript, false);
-        });
+    // keyboard and returns the geometry to the windows it shortened. A test
+    // against a mock compositor must not load it into the session's KWin.
+    if (!testMode) {
+        const QString windowRestoreScript = installWindowRestoreScript();
+        if (!windowRestoreScript.isEmpty()) {
+            setWindowRestoreScript(windowRestoreScript, true);
+            QObject::connect(&application, &QCoreApplication::aboutToQuit, &application, [windowRestoreScript] {
+                setWindowRestoreScript(windowRestoreScript, false);
+            });
+        }
     }
 
     return application.exec();

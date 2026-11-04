@@ -31,6 +31,14 @@ qt6_generate_wayland_protocol_server_sources(mockinputmethodcompositor
         ${Wayland_DATADIR}/wayland.xml
 )
 
+# This test runs the real binary against a mock compositor. Without the flag it
+# would hook into the session it runs in: register the same global shortcut
+# component as the running keyboard (the stale registration keeps the compositor
+# sending the hotkey to a process that is gone, so the shortcut silently stops
+# working), load its KWin script into the live compositor, and leave a watchdog
+# that restarts the session input method. The flag keeps the binary away.
+set_tests_properties(mockinputmethodcompositor PROPERTIES ENVIRONMENT "PLASMA_KEYBOARD_TEST_MODE=1")
+
 # Exercise the production overlay state machine with a recording input facade.
 ecm_add_test(overlaycontrollertest.cpp
     overlaytestsupport/inputplugin.h
