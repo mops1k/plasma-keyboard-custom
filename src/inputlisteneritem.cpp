@@ -65,6 +65,29 @@ void showInputPanel(QWindow *window)
     activateKeyboardWindow(window);
     QGuiApplication::inputMethod()->show();
 }
+
+//! Whether the compositor would show the keyboard right now.
+//!
+//! KWin activates the input method as soon as a text field takes the focus,
+//! but it only shows the panel for the input mode the user picked: with "touch
+//! and tablet" a mouse click focuses the field without asking for the
+//! keyboard. willShowOnActive() is the compositor's own answer to "would the
+//! panel be shown for the input that just happened", so it covers the input
+//! mode and the last input device in one check.
+bool compositorWantsKeyboard()
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"),
+                                                      QStringLiteral("/VirtualKeyboard"),
+                                                      QStringLiteral("org.kde.kwin.VirtualKeyboard"),
+                                                      QStringLiteral("willShowOnActive"));
+    const QDBusMessage reply = QDBusConnection::sessionBus().call(msg);
+    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+        return reply.arguments().first().toBool();
+    }
+    // No answer (an older compositor, a stalled bus): keep the old behaviour
+    // and show the keyboard rather than leave the field unreachable.
+    return true;
+}
 } // namespace
 
 void setInputPanelForceShowOnNextActivation()
@@ -334,7 +357,14 @@ InputListenerItem::InputListenerItem()
             qCDebug(PlasmaKeyboard) << "contextChanged hasContext=" << hasContext << "showOnLongTap=" << longTapSetting << "forceShow=" << forceShow
                                     << "lockScreenActive=" << lockScreenActive << "armed=" << armed;
             if (!watchingTouch || completedLongTouch) {
-                showInputPanel(window());
+                // A context alone does not mean the keyboard was asked for:
+                // KWin activates the input method for a focused text field
+                // even when the settings keep the panel off the screen for a
+                // mouse click. The shortcut and a completed long press are
+                // explicit requests; anything else follows the compositor.
+                if (forceShow || completedLongTouch || compositorWantsKeyboard()) {
+                    showInputPanel(window());
+                }
             }
         } else if (PlasmaKeyboardSettings::self()->hideOnInputFocusLoss()) {
             m_hideDelay->start();
@@ -358,7 +388,7 @@ InputListenerItem::InputListenerItem()
             // Re-activate when text input activates, and there is context.
             // Never do it while the keyboard was hidden on purpose: the field
             // keeps sending updates and the panel would pop up again at once.
-            if (m_sessionLockState.allowsPredictions() && !m_hiddenByUser && !m_touchHold.isArmed() && !window()->isVisible()) {
+            if (m_sessionLockState.allowsPredictions() && !m_hiddenByUser && !m_touchHold.isArmed() && !window()->isVisible() && compositorWantsKeyboard()) {
                 activateKeyboardWindow(window());
                 QGuiApplication::inputMethod()->setVisible(true);
             }
