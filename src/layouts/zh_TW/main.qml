@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.VirtualKeyboard
 import QtQuick.VirtualKeyboard.Components
+import org.kde.plasma.keyboard.custom.lib as PlasmaKeyboard
 
 KeyboardLayoutLoader {
     function createInputMethod() {
