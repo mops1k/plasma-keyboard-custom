@@ -52,14 +52,71 @@ jobs:
       # rejects), and building against Qt 6.7/6.8 produces private symbols that
       # no longer exist in 6.9.
       ARCH_SNAPSHOT_DATE: '2025/07/28'
+      # Name of the actions/cache entry that holds the snapshot's packages.
+      # Bump the version suffix whenever the package set below changes, or a
+      # stale cache will be reused (the fallback to archive.archlinux.org in
+      # "Install build dependencies" covers it, but a needless round trip to
+      # the archive is worse than fetching a fresh cache).
+      ARCH_SNAPSHOT_CACHE_KEY: arch-snapshot-2025-07-28-v1
     container:
       image: archlinux:base-devel
     steps:
+      # The snapshot is served from a single host, archive.archlinux.org, and
+      # that host does go down: run 44960983034 failed because the first pacman
+      # sync timed out after 10 s. A run that manages to fetch the snapshot
+      # stores its packages in the Actions cache together with a local pacman
+      # repository, so later runs install everything from that copy and never
+      # talk to the archive. Caches expire after 7 days without use; a run that
+      # starts after that falls back to the archive again.
+      - name: Restore the cached snapshot packages
+        id: snapcache
+        uses: actions/cache/restore@v4
+        with:
+          path: /var/cache/pacman/pkg
+          key: ${{ env.ARCH_SNAPSHOT_CACHE_KEY }}
+
       - name: Pin package snapshot
+        env:
+          CACHE_HIT: ${{ steps.snapcache.outputs.cache-hit }}
         run: |
+          set -euo pipefail
+          cache=/var/cache/pacman/pkg
+          if [ "$CACHE_HIT" = "true" ] && [ -f "$cache/.snapshot-complete" ]; then
+            # The cached set mixes core and extra packages, while the image's
+            # pacman.conf asks for a core.db and an extra.db on every server, so
+            # publish the same index under both names. Rebuild the index first
+            # (repo-add takes a second) so a half-written one never breaks the
+            # build, then serve the whole snapshot from localhost.
+            echo "Using the cached package set for $ARCH_SNAPSHOT_DATE"
+            repo-add "$cache/snapshot.db.tar.zst" "$cache"/*.pkg.tar.zst >/dev/null
+            for name in core extra; do
+              cp -f "$cache/snapshot.db.tar.zst" "$cache/$name.db"
+            done
+            printf 'Server = file://%s\n' "$cache" > /etc/pacman.d/mirrorlist
+            cat /etc/pacman.d/mirrorlist
+            du -sh "$cache"
+            exit 0
+          fi
           printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' \
             "$ARCH_SNAPSHOT_DATE" > /etc/pacman.d/mirrorlist
           cat /etc/pacman.d/mirrorlist
+          # A single 10 s timeout used to fail the whole release (run
+          # 44960983034). Probe the database over curl - pacman -Sy would also
+          # check signatures here, and the rolling image's keyring has keys of
+          # that snapshot marked as disabled - then retry with patience.
+          url="https://archive.archlinux.org/repos/${ARCH_SNAPSHOT_DATE}"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 30 -o /dev/null "$url/core/os/x86_64/core.db"; then
+              echo "Snapshot repository is reachable (attempt $attempt)"
+              exit 0
+            fi
+            echo "::warning::archive.archlinux.org did not answer (attempt $attempt of 5), retrying in 30 s"
+            if [ "$attempt" -lt 5 ]; then
+              sleep 30
+            fi
+          done
+          echo "::error::archive.archlinux.org is unreachable and no cached package set for $ARCH_SNAPSHOT_DATE exists yet. That host is the only source of the pinned Qt 6.9 packages the SteamOS 3.8 ABI requires, so this run cannot continue: rerun the workflow once the host is back (the first successful run caches the set, later runs no longer need it). No pkgrel was consumed - it is derived from the tags."
+          exit 1
 
       - name: Downgrade to the snapshot
         run: |
@@ -120,16 +177,70 @@ jobs:
         run: |
           # layer-shell-qt is needed at build time: makepkg runs with --nodeps,
           # so everything the CMake configure step looks for has to be here.
-          pacman -Syyuu --noconfirm --needed --overwrite '*' \
-            cmake extra-cmake-modules gettext ninja plasma-wayland-protocols \
-            qt6-wayland wayland-protocols pkgconf \
-            kcmutils kconfig kcoreaddons kcrash kglobalaccel ki18n \
-            kirigami kirigami-addons kitemmodels layer-shell-qt libplasma \
+          packages=(
+            cmake extra-cmake-modules gettext ninja plasma-wayland-protocols
+            qt6-wayland wayland-protocols pkgconf
+            kcmutils kconfig kcoreaddons kcrash kglobalaccel ki18n
+            kirigami kirigami-addons kitemodels layer-shell-qt libplasma
             qt6-base qt6-declarative qt6-multimedia qt6-virtualkeyboard
+          )
+          # The cached packages were fetched with signature checks off (see
+          # "Downgrade to the snapshot": the rolling image's keyring cannot
+          # verify that snapshot), so no .sig files sit next to them and the
+          # default SigLevel would reject the whole set. The cache is our own
+          # CI output, so it is installed without checking; the archive path
+          # keeps the default checks.
+          if grep -q '^Server = file://' /etc/pacman.d/mirrorlist; then
+            cp /etc/pacman.conf /etc/pacman.conf.install
+            sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
+          fi
+          if ! pacman -Syyuu --noconfirm --needed --overwrite '*' "${packages[@]}"; then
+            # A cached snapshot set can be incomplete (e.g. the dependency list
+            # grew after the cache was stored). Fall back to the archive once
+            # rather than failing the release, and drop the completeness marker
+            # so a later run fetches the packages again.
+            if ! grep -q '^Server = file://' /etc/pacman.d/mirrorlist; then
+              exit 1
+            fi
+            echo "::warning::the cached snapshot set is incomplete, installing the rest from archive.archlinux.org"
+            rm -f /var/cache/pacman/pkg/.snapshot-complete
+            printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' \
+              "$ARCH_SNAPSHOT_DATE" > /etc/pacman.d/mirrorlist
+            pacman -Syyuu --noconfirm --needed --overwrite '*' "${packages[@]}"
+          fi
+          if [ -f /etc/pacman.conf.install ]; then
+            mv /etc/pacman.conf.install /etc/pacman.conf
+          fi
           # Report what actually landed: if the snapshot pinning ever stops
           # working, the Qt stamp guard below fails the run, and this is the
           # line that says why.
           pacman -Q qt6-base qt6-declarative qt6-multimedia qt6-wayland qt6-virtualkeyboard
+
+      - name: Build the snapshot package index
+        if: steps.snapcache.outputs.cache-hit != 'true'
+        run: |
+          # Everything pacman just downloaded - the snapshot itself plus the
+          # build dependencies on top of it - already sits in the cache, so only
+          # the repository index has to be built. The marker records that the
+          # set is complete: a restored cache without it is treated as a miss
+          # and the archive is used instead.
+          cache=/var/cache/pacman/pkg
+          repo-add "$cache/snapshot.db.tar.zst" "$cache"/*.pkg.tar.zst >/dev/null
+          # pacman.conf looks for core.db and extra.db on every server, so the
+          # single local index is published under both names (see "Pin package
+          # snapshot").
+          for name in core extra; do
+            cp -f "$cache/snapshot.db.tar.zst" "$cache/$name.db"
+          done
+          touch "$cache/.snapshot-complete"
+          du -sh "$cache"
+
+      - name: Save the cached snapshot packages
+        if: steps.snapcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /var/cache/pacman/pkg
+          key: ${{ env.ARCH_SNAPSHOT_CACHE_KEY }}
 
       - name: Build package
         run: |
