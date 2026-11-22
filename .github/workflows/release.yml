@@ -110,9 +110,11 @@ jobs:
               echo "Snapshot repository is reachable (attempt $attempt)"
               exit 0
             fi
-            echo "::warning::archive.archlinux.org did not answer (attempt $attempt of 5), retrying in 30 s"
             if [ "$attempt" -lt 5 ]; then
+              echo "::warning::archive.archlinux.org did not answer (attempt $attempt of 5), retrying in 30 s"
               sleep 30
+            else
+              echo "::warning::archive.archlinux.org did not answer (attempt $attempt of 5), giving up"
             fi
           done
           echo "::error::archive.archlinux.org is unreachable and no cached package set for $ARCH_SNAPSHOT_DATE exists yet. That host is the only source of the pinned Qt 6.9 packages the SteamOS 3.8 ABI requires, so this run cannot continue: rerun the workflow once the host is back (the first successful run caches the set, later runs no longer need it). No pkgrel was consumed - it is derived from the tags."
