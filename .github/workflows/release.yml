@@ -43,37 +43,39 @@ jobs:
       tag: ${{ steps.ver.outputs.tag }}
       version: ${{ steps.ver.outputs.version }}
     env:
-      # Arch Linux Archive snapshot matching SteamOS 3.8 (Qt 6.9.1-5, KF6
-      # 6.16.0, libplasma/Plasma 6.4.3). The build is pinned to Qt 6.9 because
-      # the app uses Qt's private Gui and WaylandClient APIs, whose ABI is not
-      # stable across Qt minor releases: SteamOS 3.8 ships Qt 6.9, so the
-      # artefacts must be stamped Qt_6.9 and bind the exact private symbols Qt
-      # 6.9 exports. A rolling container would stamp them Qt_6.11 (which SteamOS
-      # rejects), and building against Qt 6.7/6.8 produces private symbols that
-      # no longer exist in 6.9.
-      ARCH_SNAPSHOT_DATE: '2025/07/28'
-      # Name of the actions/cache entry that holds the snapshot's packages.
-      # Bump the version suffix whenever the package set below changes, or a
-      # stale cache will be reused (the fallback to archive.archlinux.org in
-      # "Install build dependencies" covers it, but a needless round trip to
-      # the archive is worse than fetching a fresh cache).
-      ARCH_SNAPSHOT_CACHE_KEY: arch-snapshot-2025-07-28-v1
+      # SteamOS 3.8 ships Qt 6.9.1-5, KF6 6.16.0, libplasma/Plasma 6.4.3,
+      # glibc 2.41 and gcc 15.1.1. The build is pinned to that set because the
+      # app uses Qt's private Gui and WaylandClient APIs, whose ABI is not
+      # stable across Qt minor releases: the artefacts must be stamped Qt_6.9
+      # and bind the exact private symbols Qt 6.9 exports. A rolling container
+      # would stamp them Qt_6.11 (which SteamOS rejects), and building against
+      # Qt 6.7/6.8 produces private symbols that no longer exist in 6.9.
+      #
+      # Valve publishes that exact Arch snapshot as the core-3.8/extra-3.8
+      # repositories of the SteamOS mirror, so the build uses them instead of
+      # archive.archlinux.org: the archive is a single host and it does go
+      # down (release run 44960983034 failed that way), while the SteamOS
+      # mirror is what the deck itself installs from.
+      STEAMOS_RELEASE: '3.8'
+      STEAMOS_REPO_BASE: https://steamdeck-packages.steamos.cloud/archlinux-mirror
+      # Name of the actions/cache entry that holds the package set. Bump the
+      # version suffix whenever the package list below changes, or a stale
+      # cache will be reused.
+      STEAMOS_SNAPSHOT_CACHE_KEY: steamos-3.8-packages-v1
     container:
       image: archlinux:base-devel
     steps:
-      # The snapshot is served from a single host, archive.archlinux.org, and
-      # that host does go down: run 44960983034 failed because the first pacman
-      # sync timed out after 10 s. A run that manages to fetch the snapshot
-      # stores its packages in the Actions cache together with a local pacman
-      # repository, so later runs install everything from that copy and never
-      # talk to the archive. Caches expire after 7 days without use; a run that
-      # starts after that falls back to the archive again.
-      - name: Restore the cached snapshot packages
+      # The SteamOS package set is fetched once and then kept in the Actions
+      # cache together with a local pacman repository, so later runs install
+      # everything from that copy and do not talk to the mirror at all. Caches
+      # expire after 7 days without use; a run that starts after that fetches
+      # the set again.
+      - name: Restore the cached SteamOS packages
         id: snapcache
         uses: actions/cache/restore@v4
         with:
           path: /var/cache/pacman/pkg
-          key: ${{ env.ARCH_SNAPSHOT_CACHE_KEY }}
+          key: ${{ env.STEAMOS_SNAPSHOT_CACHE_KEY }}
 
       - name: Pin package snapshot
         env:
@@ -81,69 +83,76 @@ jobs:
         run: |
           set -euo pipefail
           cache=/var/cache/pacman/pkg
+          core_server="$STEAMOS_REPO_BASE/core-$STEAMOS_RELEASE/os/x86_64"
+          extra_server="$STEAMOS_REPO_BASE/extra-$STEAMOS_RELEASE/os/x86_64"
           if [ "$CACHE_HIT" = "true" ] && [ -f "$cache/.snapshot-complete" ]; then
-            # The cached set mixes core and extra packages, while the image's
-            # pacman.conf asks for a core.db and an extra.db on every server, so
-            # publish the same index under both names. Rebuild the index first
-            # (repo-add takes a second) so a half-written one never breaks the
-            # build, then serve the whole snapshot from localhost.
-            echo "Using the cached package set for $ARCH_SNAPSHOT_DATE"
+            # The cached set mixes core and extra packages, while pacman asks
+            # for a core.db and an extra.db on every server, so publish the
+            # same index under both names. Rebuild the index first (repo-add
+            # takes a second) so a half-written one never breaks the build,
+            # then serve the whole set from localhost.
+            echo "Using the cached package set for SteamOS $STEAMOS_RELEASE"
             repo-add "$cache/snapshot.db.tar.zst" "$cache"/*.pkg.tar.zst >/dev/null
             for name in core extra; do
               cp -f "$cache/snapshot.db.tar.zst" "$cache/$name.db"
             done
-            printf 'Server = file://%s\n' "$cache" > /etc/pacman.d/mirrorlist
-            cat /etc/pacman.d/mirrorlist
+            core_server="file://$cache"
+            extra_server="file://$cache"
             du -sh "$cache"
-            exit 0
+          else
+            # Probe the database rather than letting pacman discover it: the
+            # repositories are signed by Valve's key, which the image's keyring
+            # does not have, and a signature error must not be mistaken for an
+            # unreachable mirror. One timeout used to fail the whole release
+            # (run 44960983034); retry with patience instead.
+            for attempt in 1 2 3 4 5; do
+              if curl -fsS --max-time 30 -o /dev/null "$core_server/core.db"; then
+                echo "SteamOS $STEAMOS_RELEASE repositories are reachable (attempt $attempt)"
+                break
+              fi
+              if [ "$attempt" -lt 5 ]; then
+                echo "::warning::$core_server did not answer (attempt $attempt of 5), retrying in 30 s"
+                sleep 30
+              else
+                echo "::error::$core_server is unreachable and no cached package set for SteamOS $STEAMOS_RELEASE exists yet, so the release cannot be built. Rerun the workflow later: no pkgrel was consumed, it is derived from the tags."
+                exit 1
+              fi
+            done
           fi
-          printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' \
-            "$ARCH_SNAPSHOT_DATE" > /etc/pacman.d/mirrorlist
-          cat /etc/pacman.d/mirrorlist
-          # A single 10 s timeout used to fail the whole release (run
-          # 44960983034). Probe the database over curl - pacman -Sy would also
-          # check signatures here, and the rolling image's keyring has keys of
-          # that snapshot marked as disabled - then retry with patience.
-          url="https://archive.archlinux.org/repos/${ARCH_SNAPSHOT_DATE}"
-          for attempt in 1 2 3 4 5; do
-            if curl -fsS --max-time 30 -o /dev/null "$url/core/os/x86_64/core.db"; then
-              echo "Snapshot repository is reachable (attempt $attempt)"
-              exit 0
-            fi
-            if [ "$attempt" -lt 5 ]; then
-              echo "::warning::archive.archlinux.org did not answer (attempt $attempt of 5), retrying in 30 s"
-              sleep 30
-            else
-              echo "::warning::archive.archlinux.org did not answer (attempt $attempt of 5), giving up"
-            fi
-          done
-          echo "::error::archive.archlinux.org is unreachable and no cached package set for $ARCH_SNAPSHOT_DATE exists yet. That host is the only source of the pinned Qt 6.9 packages the SteamOS 3.8 ABI requires, so this run cannot continue: rerun the workflow once the host is back (the first successful run caches the set, later runs no longer need it). No pkgrel was consumed - it is derived from the tags."
-          exit 1
+          # The whole configuration is rewritten because the SteamOS mirror
+          # calls the repositories core-3.8/extra-3.8 where the image's
+          # pacman.conf expects core/extra, and the cached copy is served from a
+          # local directory. Signatures are off: the packages carry Valve's key,
+          # which the Arch keyring does not have, and the cache is this job's
+          # own output. Written line by line because a heredoc would keep the
+          # indentation of this file inside pacman.conf.
+          conf=/etc/pacman.conf
+          {
+            printf '[options]\n'
+            printf 'Architecture = auto\n'
+            printf 'SigLevel = Never\n'
+            printf 'LocalFileSigLevel = Optional\n'
+            printf 'ParallelDownloads = 5\n'
+            printf '\n'
+            printf '[core]\n'
+            printf 'Server = %s\n' "$core_server"
+            printf '\n'
+            printf '[extra]\n'
+            printf 'Server = %s\n' "$extra_server"
+          } > "$conf"
+          cat "$conf"
 
       - name: Downgrade to the snapshot
         run: |
-          # -Syyuu downgrades the whole rolling base-devel image to the pinned
-          # snapshot, not just the newly needed packages. The image's keyring
-          # has keys that signed the snapshot's packages disabled (e.g. the key
-          # behind `base`, which fails with "is disabled"), so signature checks
-          # are off while the rollback runs: the keyring is downgraded along with
-          # everything else and verification is restored right afterwards, so
-          # every later install is still checked.
-          cp /etc/pacman.conf /etc/pacman.conf.orig
-          sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
-          # --overwrite: the image is newer than the snapshot and has packages the
-          # snapshot predates (libstdc++/liblsan/libobjc/... split out of gcc-libs,
-          # libmakepkg-dropins out of pacman), whose files the snapshot's monolithic
-          # packages have to take back.
+          # -Syyuu downgrades the whole rolling base-devel image to the SteamOS
+          # package set, not just the newly needed packages: the binary has to
+          # link glibc, libstdc++ and Qt of SteamOS 3.8 as well, or it would
+          # require newer symbols than the deck provides.
+          # --overwrite: the image is newer than the set and has packages it
+          # predates (libstdc++/liblsan/libobjc/... split out of gcc-libs,
+          # libmakepkg-dropins out of pacman), whose files the older packages
+          # have to take back.
           pacman -Syyuu --noconfirm --needed --overwrite '*' git
-          mv /etc/pacman.conf.orig /etc/pacman.conf
-          # The image's keyring has no secret key, so pacman-key refuses to
-          # local-sign anything ("There is no secret key available to sign
-          # with"). --init creates the master key, --populate then imports the
-          # snapshot's keys and signs them again, which also clears the disabled
-          # flags that made the first rollback attempt fail on `base`.
-          pacman-key --init
-          pacman-key --populate archlinux
           # The build step chowns the workspace to an unprivileged user, which
           # makes git refuse to work here afterwards ("dubious ownership").
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -186,32 +195,21 @@ jobs:
             kirigami kirigami-addons kitemodels layer-shell-qt libplasma
             qt6-base qt6-declarative qt6-multimedia qt6-virtualkeyboard
           )
-          # The cached packages were fetched with signature checks off (see
-          # "Downgrade to the snapshot": the rolling image's keyring cannot
-          # verify that snapshot), so no .sig files sit next to them and the
-          # default SigLevel would reject the whole set. The cache is our own
-          # CI output, so it is installed without checking; the archive path
-          # keeps the default checks.
-          if grep -q '^Server = file://' /etc/pacman.d/mirrorlist; then
-            cp /etc/pacman.conf /etc/pacman.conf.install
-            sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
-          fi
           if ! pacman -Syyuu --noconfirm --needed --overwrite '*' "${packages[@]}"; then
-            # A cached snapshot set can be incomplete (e.g. the dependency list
-            # grew after the cache was stored). Fall back to the archive once
-            # rather than failing the release, and drop the completeness marker
-            # so a later run fetches the packages again.
-            if ! grep -q '^Server = file://' /etc/pacman.d/mirrorlist; then
+            # A cached set can be incomplete (e.g. the dependency list grew
+            # after the cache was stored). Fetch the rest from the SteamOS
+            # mirror once instead of failing the release, and drop the
+            # completeness marker so a later run starts from a fresh cache.
+            if ! grep -q '^Server = file://' /etc/pacman.conf; then
               exit 1
             fi
-            echo "::warning::the cached snapshot set is incomplete, installing the rest from archive.archlinux.org"
+            echo "::warning::the cached package set is incomplete, installing the rest from the SteamOS mirror"
             rm -f /var/cache/pacman/pkg/.snapshot-complete
-            printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' \
-              "$ARCH_SNAPSHOT_DATE" > /etc/pacman.d/mirrorlist
+            core_line="$(grep -n '^Server = file://' /etc/pacman.conf | sed -n 1p | cut -d: -f1)"
+            extra_line="$(grep -n '^Server = file://' /etc/pacman.conf | sed -n 2p | cut -d: -f1)"
+            sed -i "${core_line}s|.*|Server = $STEAMOS_REPO_BASE/core-$STEAMOS_RELEASE/os/x86_64|" /etc/pacman.conf
+            sed -i "${extra_line}s|.*|Server = $STEAMOS_REPO_BASE/extra-$STEAMOS_RELEASE/os/x86_64|" /etc/pacman.conf
             pacman -Syyuu --noconfirm --needed --overwrite '*' "${packages[@]}"
-          fi
-          if [ -f /etc/pacman.conf.install ]; then
-            mv /etc/pacman.conf.install /etc/pacman.conf
           fi
           # Report what actually landed: if the snapshot pinning ever stops
           # working, the Qt stamp guard below fails the run, and this is the
@@ -221,14 +219,14 @@ jobs:
       - name: Build the snapshot package index
         if: steps.snapcache.outputs.cache-hit != 'true'
         run: |
-          # Everything pacman just downloaded - the snapshot itself plus the
-          # build dependencies on top of it - already sits in the cache, so only
-          # the repository index has to be built. The marker records that the
-          # set is complete: a restored cache without it is treated as a miss
-          # and the archive is used instead.
+          # Everything pacman just downloaded - the SteamOS package set plus
+          # the build dependencies on top of it - already sits in the cache, so
+          # only the repository index has to be built. The marker records that
+          # the set is complete: a restored cache without it is treated as a
+          # miss and the mirror is used instead.
           cache=/var/cache/pacman/pkg
           repo-add "$cache/snapshot.db.tar.zst" "$cache"/*.pkg.tar.zst >/dev/null
-          # pacman.conf looks for core.db and extra.db on every server, so the
+          # pacman asks for a core.db and an extra.db on every server, so the
           # single local index is published under both names (see "Pin package
           # snapshot").
           for name in core extra; do
@@ -237,12 +235,12 @@ jobs:
           touch "$cache/.snapshot-complete"
           du -sh "$cache"
 
-      - name: Save the cached snapshot packages
+      - name: Save the cached SteamOS packages
         if: steps.snapcache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: /var/cache/pacman/pkg
-          key: ${{ env.ARCH_SNAPSHOT_CACHE_KEY }}
+          key: ${{ env.STEAMOS_SNAPSHOT_CACHE_KEY }}
 
       - name: Build package
         run: |

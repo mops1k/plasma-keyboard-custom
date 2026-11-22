@@ -6,8 +6,9 @@ pkgdesc="Virtual keyboard for Qt based desktops (custom fork with gamepad suppor
 arch=('x86_64')
 url="https://github.com/mops1k/plasma-keyboard-custom"
 license=('GPL-2.0-or-later')
-# Built against Qt 6.9 (Arch Linux Archive snapshot 2025-07-28) to match
-# SteamOS 3.8, which ships Qt 6.9.1. The binaries carry the Qt_6.9 symbol
+# Built against the package set of SteamOS 3.8 itself (its core-3.8/extra-3.8
+# repositories: Qt 6.9.1, KF6 6.16, glibc 2.41) so every symbol the binaries
+# bind is one the deck has. The binaries carry the Qt_6.9 symbol
 # version and use Qt's private Gui/WaylandClient ABI, which is only valid for
 # the Qt minor they were built against, so the versioned Qt deps below reject
 # an install on anything older than Qt 6.9. SteamOS 3.7 and older ship Qt 6.7
