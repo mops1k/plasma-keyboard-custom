@@ -61,7 +61,7 @@ jobs:
       # Name of the actions/cache entry that holds the package set. Bump the
       # version suffix whenever the package list below changes, or a stale
       # cache will be reused.
-      STEAMOS_SNAPSHOT_CACHE_KEY: steamos-3.8-packages-v1
+      STEAMOS_SNAPSHOT_CACHE_KEY: steamos-3.8-packages-v2
     container:
       image: archlinux:base-devel
     steps:
@@ -189,7 +189,7 @@ jobs:
           # layer-shell-qt is needed at build time: makepkg runs with --nodeps,
           # so everything the CMake configure step looks for has to be here.
           packages=(
-            cmake extra-cmake-modules gettext ninja plasma-wayland-protocols
+            cmake extra-cmake-modules gettext jq ninja plasma-wayland-protocols
             qt6-wayland wayland-protocols pkgconf
             kcmutils kconfig kcoreaddons kcrash kglobalaccel ki18n
             kirigami kirigami-addons kitemmodels layer-shell-qt libplasma
