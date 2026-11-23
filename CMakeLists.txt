@@ -57,6 +57,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Multimedia
     Network
     Qml
+    Sql
     VirtualKeyboard
     WaylandClient
 )

@@ -118,6 +118,10 @@ ecm_add_qtwayland_client_protocol(plasma-keyboard-custom PROTOCOL ${WaylandProto
 ecm_add_qtwayland_client_protocol(plasma-keyboard-custom PROTOCOL ${WaylandProtocols_DATADIR}/unstable/text-input/text-input-unstable-v1.xml BASENAME text-input-unstable-v1)
 ecm_add_qtwayland_client_protocol(plasma-keyboard-custom PROTOCOL "${Wayland_DATADIR}/wayland.xml" BASENAME wayland)
 ecm_add_qtwayland_client_protocol(plasma-keyboard-custom PROTOCOL ${CMAKE_CURRENT_SOURCE_DIR}/wayland/kde-lockscreen-overlay-v1.xml BASENAME kde-lockscreen-overlay-v1)
+# The clipboard image offer: KWin implements the standardised ext-data-control
+# protocol, while QtWayland only carries the older wlr-data-control flavour of
+# it. See src/clipboard/clipboardimage.cpp.
+ecm_add_qtwayland_client_protocol(plasma-keyboard-custom PROTOCOL ${WaylandProtocols_DATADIR}/staging/ext-data-control/ext-data-control-v1.xml BASENAME ext-data-control-v1)
 
 target_sources(plasma-keyboard-custom PRIVATE
     main.cpp
@@ -126,6 +130,8 @@ target_sources(plasma-keyboard-custom PRIVATE
     inputpanelrole.h
     clipboard/clipboardhistory.cpp
     clipboard/clipboardhistory.h
+    clipboard/clipboardimage.cpp
+    clipboard/clipboardimage.h
     gamepadhandler.cpp
     gamepadhandler.h
     focusededitabletracker.cpp
@@ -291,6 +297,7 @@ target_link_libraries(plasma-keyboard-custom
     Qt::Gui
     Qt::GuiPrivate
     Qt::Multimedia
+    Qt::Sql
     Qt::VirtualKeyboard
     parakeet
     whisper

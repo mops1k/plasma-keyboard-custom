@@ -1027,8 +1027,13 @@ InputPanelWindow {
                 }
                 const items = [];
                 for (let i = 0; i < thing.clipboardHistory.count; ++i) {
+                    // An image entry has no text to show: the thumbnail takes
+                    // the place of the label (see the delegate below).
+                    const image = thing.clipboardHistory.isImageAt(i);
                     items.push({
-                        "text": thing.clipboardHistory.textAt(i),
+                        "text": image ? "" : thing.clipboardHistory.textAt(i),
+                        "image": image,
+                        "thumbnail": image ? thing.clipboardHistory.thumbnailAt(i) : "",
                         "completion": 0,
                         "suggestion": false
                     });
@@ -1214,6 +1219,11 @@ InputPanelWindow {
                                     id: chipLabel
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     anchors.verticalCenter: parent.verticalCenter
+                                    // An image entry has no text: the thumbnail
+                                    // below takes its place. Without a thumbnail
+                                    // the placeholder text Klipper gave the entry
+                                    // stays, so the chip is never blank.
+                                    visible: !chip.modelData.image || chip.modelData.thumbnail.length === 0
                                     // The suggestion takes the width of its text
                                     // (the chip is measured from it); a clipboard
                                     // entry takes the width of the chip and is cut
@@ -1232,6 +1242,21 @@ InputPanelWindow {
                                         family: PlasmaKeyboard.BreezeConstants.fontFamily
                                         pixelSize: suggestionsRow.kbdStyle ? 60 * (suggestionsRow.kbdStyle.targetKeyboardHeight / suggestionsRow.kbdStyle.keyboardDesignHeight) * suggestionsRow.fontScale : Kirigami.Units.gridUnit
                                     }
+                                }
+
+                                // An image entry of the clipboard: Klipper's
+                                // thumbnail takes the whole chip, keeping its
+                                // aspect ratio.
+                                Image {
+                                    anchors.fill: parent
+                                    anchors.margins: PlasmaKeyboard.BreezeConstants.keyBackgroundMargin * 2
+                                    visible: chip.modelData.image === true && chip.modelData.thumbnail.length > 0
+                                    source: visible ? chip.modelData.thumbnail : ""
+                                    fillMode: Image.PreserveAspectFit
+                                    asynchronous: true
+                                    cache: true
+                                    sourceSize.width: Math.round(chip.width)
+                                    sourceSize.height: Math.round(chip.height)
                                 }
                             }
 

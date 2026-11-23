@@ -107,7 +107,7 @@ ecm_add_test(clipboardhistorytest.cpp
     ../src/clipboard/clipboardhistory.cpp
     ../src/sessionlockstate.cpp
     TEST_NAME clipboardhistorytest
-    LINK_LIBRARIES Qt::Core Qt::DBus Qt::Qml Qt::Test
+    LINK_LIBRARIES Qt::Core Qt::DBus Qt::Gui Qt::Qml Qt::Sql Qt::Test
 )
 target_include_directories(clipboardhistorytest BEFORE PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/clipboardtestsupport

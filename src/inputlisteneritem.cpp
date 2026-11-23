@@ -8,6 +8,7 @@
 
 #include "inputlisteneritem.h"
 #include "clipboard/clipboardhistory.h"
+#include "clipboard/clipboardimage.h"
 #include "inputmethod_p.h"
 #include "logging.h"
 #include "plasmakeyboardsettings.h"
@@ -34,11 +35,16 @@
 #include <qpa/qwindowsysteminterface.h>
 
 #include <linux/input-event-codes.h>
+#include <xkbcommon/xkbcommon-keysyms.h>
 
 Q_GLOBAL_STATIC(InputMethod, s_im)
 
 namespace
 {
+//! How long the compositor gets to process the new clipboard selection before
+//! the paste shortcut is sent over the separate uinput channel.
+constexpr int pasteDelayMs = 150;
+
 // Timestamp (ms since epoch) until which the next input activation must show
 // the keyboard immediately, bypassing the long-press mode.
 std::atomic<qint64> s_forceShowUntil{0};
@@ -216,6 +222,7 @@ InputListenerItem::InputListenerItem()
     , m_sessionLockState(*SessionLockState::instance())
     , m_overlayController(new OverlayController(&m_input, this))
     , m_clipboardHistory(new ClipboardHistory(&m_sessionLockState, this))
+    , m_clipboardImage(new ClipboardImage(this))
     , m_uinput(std::make_unique<UinputKeyboard>(this))
 {
     // Grab and listen to physical keyboard input
@@ -566,7 +573,55 @@ void InputListenerItem::pasteClipboardEntry(int row)
     if (!predictionActive()) {
         return;
     }
+    const QString imagePath = m_clipboardHistory->imagePathAt(row);
+    if (!imagePath.isEmpty()) {
+        pasteImage(imagePath);
+        return;
+    }
     commitText(m_clipboardHistory->textAt(row));
+}
+
+void InputListenerItem::pasteImage(const QString &path)
+{
+    if (!m_clipboardImage || !m_clipboardImage->setImage(path)) {
+        qCWarning(PlasmaKeyboard) << "clipboard: cannot offer the image to the compositor:" << path;
+        return;
+    }
+    // The selection is announced over the keyboard's own Wayland connection,
+    // while the key combination below goes through uinput, which the
+    // compositor may process first; give it a moment to see the new selection
+    // before the application reads the clipboard for Ctrl+V.
+    QTimer::singleShot(pasteDelayMs, this, &InputListenerItem::sendPasteShortcut);
+}
+
+void InputListenerItem::sendPasteShortcut()
+{
+    auto *modifiers = KeyboardModifiers::instance();
+    if (modifiers->ctrl() || modifiers->alt() || modifiers->meta()) {
+        // The paste combination brings its own Control; a latched modifier
+        // would be pressed a second time and stay engaged afterwards.
+        releaseAllHeldUinputModifiers();
+        modifiers->reset();
+        cancelModifierHoldTimer();
+    }
+
+    if (m_uinput && m_uinput->isValid()) {
+        m_uinput->pressKey(KEY_LEFTCTRL);
+        m_uinput->pressKey(KEY_V);
+        m_uinput->releaseKey(KEY_V);
+        m_uinput->releaseKey(KEY_LEFTCTRL);
+        return;
+    }
+
+    // Fallback for when /dev/uinput could not be opened; see handleModifiedKey().
+    const uint32_t keycode = m_input.keycodeForKeysym(XKB_KEY_v);
+    if (keycode == 0) {
+        return;
+    }
+    m_input.sendModifiers(m_input.controlMask(), 0, 0, 0);
+    m_input.key(InputPlugin::Pressed, keycode);
+    m_input.key(InputPlugin::Released, keycode);
+    m_input.sendModifiers(0, 0, 0, 0);
 }
 
 QString InputListenerItem::textBeforeCursor() const

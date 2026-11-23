@@ -24,6 +24,7 @@
 #include <memory>
 
 class ClipboardHistory;
+class ClipboardImage;
 class OverlayController;
 class QTimer;
 
@@ -156,6 +157,10 @@ public:
      * Used by the clipboard row to paste a copied text.
      */
     Q_INVOKABLE void commitText(const QString &text);
+    /**
+     * Pastes the clipboard entry @p row: a text is committed, an image is put
+     * on the desktop clipboard and pasted with Ctrl+V (see pasteImage()).
+     */
     Q_INVOKABLE void pasteClipboardEntry(int row);
 
     bool predictionActive() const
@@ -265,6 +270,20 @@ private:
     //! when either of them changed.
     void updatePredictionWords();
 
+    /**
+     * Offers the PNG at @p path on the desktop clipboard and presses Ctrl+V,
+     * so that the focused application pastes it. An input method cannot put
+     * an image into a field by itself -- the text it commits is a string --
+     * but the application pastes an image from the clipboard the same way it
+     * does for a copied picture.
+     */
+    void pasteImage(const QString &path);
+
+    //! Sends Ctrl+V: through uinput when the virtual keyboard device is
+    //! available (a real key combination, like every other shortcut this
+    //! keyboard sends), and through the input context otherwise.
+    void sendPasteShortcut();
+
     //! The text of the field from its beginning up to the cursor.
     QString textBeforeCursor() const;
 
@@ -272,6 +291,7 @@ private:
     SessionLockState &m_sessionLockState;
     OverlayController *m_overlayController = nullptr;
     ClipboardHistory *m_clipboardHistory = nullptr;
+    ClipboardImage *m_clipboardImage = nullptr;
     TouchHoldWatcher m_touchHold;
     FocusedEditableTracker m_focusedEditable;
     bool m_longPressNeedsHitTest = false;
