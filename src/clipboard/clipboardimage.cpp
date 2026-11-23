@@ -32,8 +32,11 @@ bool isPng(const QByteArray &data)
 }
 
 ClipboardImage::ClipboardImage(QObject *parent)
-    : QWaylandClientExtensionTemplate<ClipboardImage>(1, parent)
+    // The release packages build against Qt 6.9, where this constructor takes
+    // the version only; the parent is assigned afterwards.
+    : QWaylandClientExtensionTemplate<ClipboardImage>(1)
 {
+    setParent(parent);
 }
 
 ClipboardImage::~ClipboardImage()
@@ -157,7 +160,7 @@ void ClipboardImage::Source::writeMore()
         if (written < 0 && errno == EINTR) {
             continue;
         }
-        if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (written < 0 && errno == EAGAIN) {
             return;
         }
         closePipe();
